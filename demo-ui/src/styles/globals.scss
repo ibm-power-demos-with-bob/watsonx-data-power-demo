@@ -1,0 +1,101 @@
+@use '@carbon/react/scss/themes';
+@use '@carbon/react/scss/theme' with ($theme: themes.$g100);
+@use '@carbon/react/scss/reset';
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/motion';
+@use '@carbon/react/scss/zone';
+
+// Demo-specific overrides — keep minimal
+:root {
+  --demo-bg: #161616;
+  --demo-surface: #262626;
+  --demo-surface-2: #393939;
+  --demo-border: #525252;
+  --demo-text: #f4f4f4;
+  --demo-text-muted: #c6c6c6;
+  --demo-green: #42be65;
+  --demo-red: #fa4d56;
+  --demo-orange: #ff832b;
+  --demo-yellow: #f1c21b;
+  --demo-teal: #08bdba;
+  --demo-blue: #4589ff;
+  --demo-purple: #be95ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--demo-bg);
+  color: var(--demo-text);
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+// Scrollbar styling for the POS stream
+.pos-stream-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.pos-stream-scroll::-webkit-scrollbar-track {
+  background: var(--demo-surface);
+}
+.pos-stream-scroll::-webkit-scrollbar-thumb {
+  background: var(--demo-border);
+  border-radius: 2px;
+}
+
+// Carbon dark theme overrides
+.cds--content {
+  background-color: var(--demo-bg);
+  padding: 0;
+}
+
+// Pulse animation for live indicator dot
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--demo-green);
+  animation: pulse 1.6s ease-in-out infinite;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+// Alert card slide-in
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.alert-card-enter {
+  animation: slideIn 0.35s ease-out forwards;
+}
+
+// Source badge colours
+.badge-ibmi   { background: #001d6c; color: #78a9ff; border: 1px solid #0043ce; }
+.badge-edb    { background: #1c0f30; color: var(--demo-purple); border: 1px solid #6929c4; }
+.badge-iceberg { background: #012749; color: var(--demo-teal); border: 1px solid #00539a; }
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 2px;
+  white-space: nowrap;
+}

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBM watsonx.data on Power — SMT4 Licensing Savings Calculator</title>
+    <style>
+        :root {
+            --cds-interactive: #0f62fe;
+            --cds-layer: #ffffff;
+            --cds-background: #f4f4f4;
+            --cds-text-primary: #161616;
+            --cds-text-secondary: #525252;
+            --cds-border-subtle: #e0e0e0;
+            --cds-support-success: #24a148;
+            --cds-support-danger: #da1e28;
+            --cds-font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--cds-font-family); }
+        body { background-color: var(--cds-background); color: var(--cds-text-primary); padding: 2rem; line-height: 1.5; }
+        .container { max-width: 1100px; margin: 0 auto; background: var(--cds-layer); border: 1px solid var(--cds-border-subtle); padding: 2.5rem; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+        h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        p.subtitle { color: var(--cds-text-secondary); margin-bottom: 2rem; font-size: 0.95rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: #fbfbfb; border: 1px solid var(--cds-border-subtle); padding: 1.5rem; border-radius: 4px; }
+        .card h2 { font-size: 1.15rem; margin-bottom: 1rem; border-bottom: 2px solid var(--cds-interactive); padding-bottom: 0.5rem; }
+        .form-group { margin-bottom: 1.25rem; }
+        label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.35rem; }
+        input[type="number"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid var(--cds-border-subtle); font-size: 1rem; border-radius: 2px; }
+        .help-text { font-size: 0.75rem; color: var(--cds-text-secondary); margin-top: 0.25rem; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .comparison-table th, .comparison-table td { padding: 0.75rem; border-bottom: 1px solid var(--cds-border-subtle); text-align: left; font-size: 0.9rem; }
+        .comparison-table th { background: #f0f0f0; font-weight: 600; }
+        .highlight-power { background: rgba(15, 98, 254, 0.08); font-weight: 600; color: var(--cds-interactive); }
+        .savings-hero { background: #defbe6; border: 1px solid var(--cds-support-success); padding: 1.5rem; border-radius: 4px; text-align: center; margin-top: 1.5rem; }
+        .savings-hero h3 { font-size: 1.25rem; color: #0e6027; margin-bottom: 0.25rem; }
+        .savings-amount { font-size: 2.25rem; font-weight: 700; color: #0e6027; }
+        .rule-badge { display: inline-block; background: #e0e0e0; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; font-family: monospace; }
+        .footer-note { font-size: 0.8rem; color: var(--cds-text-secondary); margin-top: 1.5rem; line-height: 1.4; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ watsonx.data: x86 vs. IBM Power Sizing & Cost Calculator</h1>
+        <p class="subtitle">Demonstrating the commercial advantage of IBM Software Hub (CP4D) on Power10/Power11 via the SMT4 ÷4 rule.</p>
+        
+        <div class="grid">
+            <div class="card">
+                <h2>1. Enter Sized Workload (vCPU)</h2>
+                <div class="form-group">
+                    <label for="coreVcpu">watsonx.data Core Base (vCPU)</label>
+                    <input type="number" id="coreVcpu" value="27" min="1" oninput="calculate()">
+                    <div class="help-text">Base lakehouse metadata, catalog & security services (Ratio: 2 VPC / 1 RU)</div>
+                </div>
+                <div class="form-group">
+                    <label for="prestoVcpu">Presto Engine (vCPU)</label>
+                    <input type="number" id="prestoVcpu" value="128" min="0" oninput="calculate()">
+                    <div class="help-text">High-performance interactive SQL query engine (Ratio: 2 VPC / 1 RU)</div>
+                </div>
+                <div class="form-group">
+                    <label for="sparkVcpu">Apache Spark Engine (vCPU)</label>
+                    <input type="number" id="sparkVcpu" value="64" min="0" oninput="calculate()">
+                    <div class="help-text">Large-scale batch, stream & AI ETL pipeline (Ratio: 2 VPC / 1 RU)</div>
+                </div>
+                <div class="form-group">
+                    <label for="opensearchVcpu">OpenSearch Engine (vCPU)</label>
+                    <input type="number" id="opensearchVcpu" value="24" min="0" oninput="calculate()">
+                    <div class="help-text">Vector & keyword retrieval engine for GenAI (Ratio: 6 VPC / 1 RU)</div>
+                </div>
+                <div class="form-group">
+                    <label for="ruPrice">Resource Unit (RU) Annual Indicative List Price ($)</label>
+                    <input type="number" id="ruPrice" value="8664" min="1000" oninput="calculate()">
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>2. Entitlement & Cost Comparison</h2>
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>x86 Architecture</th>
+                            <th class="highlight-power">IBM Power (SMT4)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Total Input vCPU</td>
+                            <td id="x86Vcpu">243 vCPU</td>
+                            <td id="powerVcpu" class="highlight-power">243 vCPU</td>
+                        </tr>
+                        <tr>
+                            <td>Software VPC Count</td>
+                            <td id="x86Vpc">243 VPC <span class="rule-badge">(1:1)</span></td>
+                            <td id="powerVpc" class="highlight-power">62 VPC <span class="rule-badge">(÷4)</span></td>
+                        </tr>
+                        <tr>
+                            <td>Required Resource Units (RU)</td>
+                            <td id="x86Ru">124 RU</td>
+                            <td id="powerRu" class="highlight-power">33 RU</td>
+                        </tr>
+                        <tr>
+                            <td>Est. Annual SW List Price</td>
+                            <td id="x86Cost">$1,074,336</td>
+                            <td id="powerCost" class="highlight-power">$285,912</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="savings-hero">
+                    <h3>Direct Software Licensing Savings</h3>
+                    <div class="savings-amount" id="savingsPct">73.4% ($788,424 / yr)</div>
+                    <p style="font-size: 0.85rem; color: #0e6027; margin-top: 0.25rem;">Plus elimination of cross-cloud data egress fees for core enterprise databases.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Why Does This Math Work?</h2>
+            <p style="font-size: 0.9rem; color: var(--cds-text-secondary); margin-bottom: 0.5rem;">
+                Under IBM Container Licensing rules (Passport Advantage / IBM License Service), 1 x86 hardware thread equals 1 Virtual Processor Core (VPC). 
+                On IBM Power, with SMT4 active (4 hardware threads per physical core), <strong>vCPUs map to VPCs with a divisor of 4</strong> (<code>vCPU ÷ 4 = VPC</code>). 
+                Because watsonx.data is licensed in Resource Units (RU) based on VPCs, customer software license requirements are slashed dramatically.
+            </p>
+        </div>
+
+        <p class="footer-note">
+            * Disclaimer: Sizing and pricing calculations are for technical presales demonstration and indicative estimation purposes only. Actual client licensing should be validated via the official IBM Sales Configurator and Passport Advantage agreement.
+        </p>
+    </div>
+
+    <script>
+        function calculate() {
+            const coreVcpu = parseInt(document.getElementById('coreVcpu').value) || 0;
+            const prestoVcpu = parseInt(document.getElementById('prestoVcpu').value) || 0;
+            const sparkVcpu = parseInt(document.getElementById('sparkVcpu').value) || 0;
+            const opensearchVcpu = parseInt(document.getElementById('opensearchVcpu').value) || 0;
+            const ruPrice = parseFloat(document.getElementById('ruPrice').value) || 8664;
+
+            const totalVcpu = coreVcpu + prestoVcpu + sparkVcpu + opensearchVcpu;
+
+            // x86 Calculations (1:1 vCPU to VPC)
+            const x86CoreRu = Math.ceil(coreVcpu / 2);
+            const x86PrestoRu = Math.ceil(prestoVcpu / 2);
+            const x86SparkRu = Math.ceil(sparkVcpu / 2);
+            const x86OpensearchRu = Math.ceil(opensearchVcpu / 6);
+            const x86TotalRu = x86CoreRu + x86PrestoRu + x86SparkRu + x86OpensearchRu;
+            const x86TotalCost = x86TotalRu * ruPrice;
+
+            // Power Calculations (vCPU / 4 = VPC)
+            const powerCoreVpc = Math.ceil(coreVcpu / 4);
+            const powerPrestoVpc = Math.ceil(prestoVcpu / 4);
+            const powerSparkVpc = Math.ceil(sparkVcpu / 4);
+            const powerOpensearchVpc = Math.ceil(opensearchVcpu / 4);
+            const powerTotalVpc = powerCoreVpc + powerPrestoVpc + powerSparkVpc + powerOpensearchVpc;
+
+            const powerCoreRu = Math.ceil(powerCoreVpc / 2);
+            const powerPrestoRu = Math.ceil(powerPrestoVpc / 2);
+            const powerSparkRu = Math.ceil(powerSparkVpc / 2);
+            const powerOpensearchRu = Math.ceil(powerOpensearchVpc / 6);
+            const powerTotalRu = powerCoreRu + powerPrestoRu + powerSparkRu + powerOpensearchRu;
+            const powerTotalCost = powerTotalRu * ruPrice;
+
+            const savingsDollars = x86TotalCost - powerTotalCost;
+            const savingsPercent = x86TotalCost > 0 ? ((savingsDollars / x86TotalCost) * 100).toFixed(1) : 0;
+
+            document.getElementById('x86Vcpu').innerText = `${totalVcpu} vCPU`;
+            document.getElementById('powerVcpu').innerText = `${totalVcpu} vCPU`;
+
+            document.getElementById('x86Vpc').innerHTML = `${totalVcpu} VPC <span class="rule-badge">(1:1)</span>`;
+            document.getElementById('powerVpc').innerHTML = `${powerTotalVpc} VPC <span class="rule-badge">(÷4)</span>`;
+
+            document.getElementById('x86Ru').innerText = `${x86TotalRu} RU`;
+            document.getElementById('powerRu').innerText = `${powerTotalRu} RU`;
+
+            document.getElementById('x86Cost').innerText = `$${x86TotalCost.toLocaleString()}`;
+            document.getElementById('powerCost').innerText = `$${powerTotalCost.toLocaleString()}`;
+
+            document.getElementById('savingsPct').innerText = `${savingsPercent}% ($${savingsDollars.toLocaleString()} / yr)`;
+        }
+        calculate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Shared configuration for synthetic event streams
+
+global:
+  output_format: "json" # options: json, csv, console, parquet-mock
+  default_batch_size: 10
+  default_stream_rate: 5 # events per second
+  random_seed: 42
+
+retail:
+  stores_count: 250
+  skus_count: 5000
+  regions: ["EMEA-North", "EMEA-South", "Americas-East", "Americas-West", "APAC"]
+  stockout_anomaly_rate: 0.08
+
+telco:
+  towers_count: 120
+  regions: ["London-Metro", "Midlands", "Manchester-Urban", "Scotland-Highlands", "Wales-Rural"]
+  degradation_anomaly_rate: 0.05
+
+finance:
+  accounts_count: 50000
+  merchants_count: 1200
+  fraud_anomaly_rate: 0.03
+  currencies: ["EUR", "GBP", "USD", "CHF"]
+
+healthcare:
+  facilities_count: 15
+  departments: ["Emergency", "Cardiology", "Oncology", "Trauma", "Pediatrics", "ICU"]
+  surge_anomaly_rate: 0.06

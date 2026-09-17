@@ -1,0 +1,50 @@
+﻿# Dependencies
+node_modules/
+.npm/
+
+# Next.js build output
+demo-ui/.next/
+demo-ui/out/
+
+# Environment files - NEVER commit secrets
+.env
+.env.local
+.env*.local
+demo-ui/.env
+demo-ui/.env.local
+demo-ui/.env*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Data files - large CSVs not needed in repo
+data/olist/*.csv
+data/olist/*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# SSH keys - belt and braces
+*.pem
+*.key
+*.user
+*_rsa
+
+# Bob
+.bob/tmp/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Setup secrets - never commit
+setup/config.env
