@@ -10,9 +10,11 @@ import urllib.request, urllib.parse, json, sys, os
 WXD_APIKEY    = os.environ['WXD_APIKEY']
 INSTANCE_CRN  = os.environ['WXD_INSTANCE_CRN']
 INSTANCE_GUID = os.environ['WXD_INSTANCE_GUID']
-# Route through the Satellite cloud endpoint on localhost
+# Route through the wxd-api Satellite cloud endpoint on localhost
+# wxd-api (port 29998) -> eu-gb.lakehouse.cloud.ibm.com:443  (Lakehouse REST API)
+# wxd-presto (port 29999) -> <engine-host>:32564              (Presto query engine)
 TUNNEL_HOST   = 'localhost'
-TUNNEL_PORT   = 29999   # cloud endpoint target port (host networking — no -p remapping)
+TUNNEL_PORT   = 29998   # wxd-api cloud endpoint
 
 # Step 1 — get IAM token (iam.cloud.ibm.com is reachable directly, not Cloudflare-blocked)
 data = urllib.parse.urlencode({

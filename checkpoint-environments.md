@@ -79,10 +79,11 @@ This provisions both IBM i and RHEL into the same on-prem pod in a single reserv
 | **Previous Connector ID** | `U2F0ZWxsaXRlQ29ubmVjdG9yOiJkYTdoc29tbDFxc2Zhb2FhbGhqZyI` (may still be valid if reused) |
 | **Connector name** | `wxd-power-connector` (expected name) |
 | **Connector IAM API key** | `e21ytQOcIANGVrHJaqRyAhysRhtV2-VUevt9fISRG4IO` |
-| **Endpoints — status** | **Need re-verification** — `ibmi-db2` destination IP must be updated to current IBM i IP `129.40.125.73` if connector was reused; if new connector, all 3 endpoints must be recreated |
-| **pg-olist endpoint** | `c-01.private.eu-gb.link.satellite.cloud.ibm.com:33156` → `127.0.0.1:5432` (from previous reservation — verify still active) |
-| **ibmi-db2 endpoint** | `c-01.private.eu-gb.link.satellite.cloud.ibm.com:33180` → `129.40.125.73:8471` (IBM i IP confirmed from new on-prem reservation) |
-| **wxd-presto endpoint** | client_port **`29999`**, dest placeholder — update to real Presto hostname:31618 after tunnel is up |
+| **Endpoints — status** | ✅ All 3 confirmed correct (2026-09-17) |
+| **pg-olist endpoint** | `c-01.private.eu-gb.link.satellite.cloud.ibm.com:33156` → `127.0.0.1:5432` ✅ |
+| **ibmi-db2 endpoint** | `c-01.private.eu-gb.link.satellite.cloud.ibm.com:33180` → `129.40.125.73:8471` ✅ |
+| **wxd-presto endpoint** | `localhost:29999` (on RHEL) → `ff5b1b42-0d0a-4d03-ac39-b4529cbda74c.d4mn75il0dt1ob8mmlug.lakehouse.ibmappdomain.cloud:32564` ✅ updated |
+| **wxd-presto endpoint ID** | `U2F0ZWxsaXRlQ29ubmVjdG9yOiJkYTdoc29tbDFxc2Zhb2FhbGhqZyI_sebnu` |
 | **⚠️ ITZ-V2 account access** | Must accept invite via **notification bell** at cloud.ibm.com before account is accessible. No email is sent — check the bell icon. Then use the **account switcher dropdown** to select `2112072 - ITZ-V2`. |
 
 ---
