@@ -11,6 +11,7 @@
  */
 
 'use client'
+import { useState } from 'react'
 
 interface SourceCardProps {
   number: string
@@ -22,6 +23,10 @@ interface SourceCardProps {
   tables: string[]
   narrative: string
   status: 'connected' | 'stub' | 'offline'
+  isSecurity?: boolean
+  isTechnical?: boolean
+  isExecutive?: boolean
+  isOperations?: boolean
 }
 
 function StatusDot({ status }: { status: SourceCardProps['status'] }) {
@@ -67,7 +72,23 @@ function SourceCard({
   tables,
   narrative,
   status,
+  isSecurity,
+  isTechnical,
+  isExecutive,
+  isOperations,
 }: SourceCardProps) {
+  
+  // Audience-specific relevance badge
+  const audienceBadge = (number === '1' && isExecutive) ? (
+    <span style={{ background: '#0f62fe22', border: '1px solid #0f62fe', borderRadius: 2, padding: '2px 6px', fontSize: 8, fontWeight: 600, color: '#0f62fe', textTransform: 'uppercase' }}>ERP OWNER</span>
+  ) : (number === '2' && isOperations) ? (
+    <span style={{ background: '#f1c21b22', border: '1px solid #f1c21b', borderRadius: 2, padding: '2px 6px', fontSize: 8, fontWeight: 600, color: '#f1c21b', textTransform: 'uppercase' }}>TIER-2 GRAPH</span>
+  ) : (number === '3' && isSecurity) ? (
+    <span style={{ background: '#da1e2822', border: '1px solid #da1e28', borderRadius: 2, padding: '2px 6px', fontSize: 8, fontWeight: 600, color: '#da1e28', textTransform: 'uppercase' }}>THREAT FEED</span>
+  ) : (number === '3' && isTechnical) ? (
+    <span style={{ background: '#08bdba22', border: '1px solid #08bdba', borderRadius: 2, padding: '2px 6px', fontSize: 8, fontWeight: 600, color: '#08bdba', textTransform: 'uppercase' }}>ICEBERG</span>
+  ) : null
+
   return (
     <div
       style={{
@@ -106,6 +127,7 @@ function SourceCard({
           </div>
           <div style={{ fontSize: 11, color: 'var(--demo-text-muted)' }}>{subtitle}</div>
         </div>
+        {audienceBadge}
         <StatusDot status={status} />
       </div>
 
@@ -209,7 +231,63 @@ const SOURCES: SourceCardProps[] = [
   },
 ]
 
-export default function DataSourcePanel() {
+// Live federation SQL queries for both scenarios
+const LIVE_QUERIES = {
+  'supplier-cyber-incident': {
+    title: 'Cyber Incident — Federated Exposure Query',
+    description: 'Joins CISA KEV signal (Iceberg) → tier-2 supplier graph (EDB) → open POs & customer exposure (IBM i)',
+    sql: `-- Federated Cyber Exposure Query
+-- Runs in <2 seconds on Presto (watsonx.data) across 3 sources
+
+SELECT
+  COUNT(po.po_number)                         AS open_po_count,
+  COUNT(DISTINCT s.supplier_id)               AS tier1_suppliers_affected,
+  CAST(SUM(po.unit_price + po.freight_value) AS DOUBLE) AS total_exposure_gbp,
+  MIN(CAST(po.ship_limit_date AS VARCHAR(30))) AS earliest_order,
+  SUM(CASE WHEN po.po_status = 'OPEN' THEN 1 ELSE 0 END) AS critical_pos_7_days
+FROM pg_olist.olist.v_purchase_orders po
+JOIN pg_olist.olist.v_suppliers s
+  ON po.supplier_id = s.supplier_id
+JOIN pg_olist.olist.v_tier2_suppliers t2
+  ON s.subcontracted_to_id = t2.tier2_id
+JOIN ibmi_olist.OLIST.ORDERS o
+  ON po.customer_id = o."customer id"
+WHERE t2.company_name = 'Nexaflow Logistics Ltd'
+  AND t2.breach_status = 'COMPROMISED'
+  AND o."order date" >= CURRENT_DATE - 30 DAYS;`,
+  },
+  'eu-wildfire': {
+    title: 'Wildfire Corridor — At-Risk POs Query',
+    description: 'Joins route disruption signal (Iceberg) → warehouse corridors (EDB) → active freight POs (IBM i)',
+    sql: `-- Federated Wildfire Exposure Query
+-- Runs in <2 seconds on Presto (watsonx.data) across 3 sources
+
+SELECT
+  po.po_number,
+  CAST(po.unit_price + po.freight_value AS DOUBLE) AS order_value,
+  w.region_label                                   AS supplier_region,
+  o."customer id"                                  AS customer_id,
+  o."order id"                                     AS order_id
+FROM pg_olist.olist.v_purchase_orders po
+JOIN pg_olist.olist.v_warehouses w
+  ON po.warehouse_id = w.warehouse_id
+JOIN ibmi_olist.OLIST.ORDERS o
+  ON po.customer_id = o."customer id"
+WHERE w.region_label IN ('South France', 'Catalonia', 'Mediterranean')
+  AND po.po_status = 'OPEN'
+  AND o."order date" >= CURRENT_DATE - 30 DAYS
+ORDER BY po.ship_limit_date ASC
+LIMIT 10;`,
+  },
+}
+
+export default function DataSourcePanel({ scenario, queryExecuting, isSecurity, isTechnical, isExecutive, isOperations }: { scenario?: 'supplier-cyber-incident' | 'eu-wildfire'; queryExecuting?: boolean; isSecurity?: boolean; isTechnical?: boolean; isExecutive?: boolean; isOperations?: boolean }) {
+  const [activeTab, setActiveTab] = useState<'architecture' | 'live-query'>('architecture')
+  const query = scenario ? LIVE_QUERIES[scenario] : null
+
+  // Audience-specific tab visibility: hide Live Query tab for non-technical audiences
+  const showLiveQueryTab = isTechnical || isSecurity || query !== null
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
@@ -229,63 +307,210 @@ export default function DataSourcePanel() {
         <span style={{ fontSize: 11, color: 'var(--demo-text-muted)' }}>
           watsonx.data Federation
         </span>
+        {(isSecurity || isTechnical || isExecutive || isOperations) && (
+          <span style={{
+            background: 'var(--demo-surface-2)',
+            border: '1px solid var(--demo-border)',
+            borderRadius: 12,
+            padding: '2px 8px',
+            fontSize: 9,
+            fontWeight: 600,
+            color: isSecurity ? 'var(--demo-red)' : isTechnical ? 'var(--demo-purple)' : isOperations ? 'var(--demo-green)' : 'var(--demo-blue)',
+            textTransform: 'uppercase',
+          }}>
+            {isSecurity && '🔒 SEC'}
+            {isTechnical && '🔧 TECH'}
+            {isOperations && '📦 OPS'}
+            {isExecutive && '🎯 EXEC'}
+          </span>
+        )}
       </div>
 
-      {/* The satnav strapline */}
+      {/* Tab Navigation */}
       <div
         style={{
-          padding: '8px 16px',
+          display: 'flex',
           borderBottom: '1px solid var(--demo-border)',
           background: 'var(--demo-surface)',
           flexShrink: 0,
         }}
       >
-        <div
+        <button
+          onClick={() => setActiveTab('architecture')}
           style={{
-            fontSize: 12,
-            color: 'var(--demo-text-muted)',
-            lineHeight: 1.5,
-            borderLeft: '3px solid var(--demo-teal)',
-            paddingLeft: 10,
+            padding: '8px 16px',
+            border: 'none',
+            background: activeTab === 'architecture' ? 'var(--demo-bg)' : 'transparent',
+            color: activeTab === 'architecture' ? 'var(--demo-text)' : 'var(--demo-text-muted)',
+            fontSize: 11,
+            fontWeight: activeTab === 'architecture' ? 600 : 400,
+            borderBottom: activeTab === 'architecture' ? '2px solid var(--demo-blue)' : '2px solid transparent',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          <strong style={{ color: 'var(--demo-text)' }}>Map vs. satnav.</strong> A static report
-          shows what was true last night. This demo shows three live sources joined in real time —
-          the gap your ERP cannot see, found in seconds.
-        </div>
+          🏗 Architecture
+        </button>
+        {query && showLiveQueryTab && (
+          <button
+            onClick={() => setActiveTab('live-query')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: activeTab === 'live-query' ? 'var(--demo-bg)' : 'transparent',
+              color: activeTab === 'live-query' ? 'var(--demo-blue)' : 'var(--demo-text-muted)',
+              fontSize: 11,
+              fontWeight: activeTab === 'live-query' ? 600 : 400,
+              borderBottom: activeTab === 'live-query' ? '2px solid var(--demo-blue)' : '2px solid transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            🔍 Live Query
+            {queryExecuting && (
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%',
+                border: '2px solid var(--demo-blue)', borderTopColor: 'transparent',
+                animation: 'spin 1s linear infinite',
+              }} />
+            )}
+          </button>
+        )}
       </div>
 
-      {/* Source cards */}
-      <div
-        style={{
-          flex: 1,
-          padding: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          overflowY: 'auto',
-        }}
-      >
-        {SOURCES.map((s) => (
-          <SourceCard key={s.number} {...s} />
-        ))}
-      </div>
+      {/* Tab Content */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {activeTab === 'architecture' && (
+          <>
+            {/* The satnav strapline */}
+            <div
+              style={{
+                padding: '8px 16px',
+                borderBottom: '1px solid var(--demo-border)',
+                background: 'var(--demo-surface)',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--demo-text-muted)',
+                  lineHeight: 1.5,
+                  borderLeft: '3px solid var(--demo-teal)',
+                  paddingLeft: 10,
+                }}
+              >
+                <strong style={{ color: 'var(--demo-text)' }}>Map vs. satnav.</strong> A static report
+                shows what was true last night. This demo shows three live sources joined in real time —
+                the gap your ERP cannot see, found in seconds.
+              </div>
+            </div>
 
-      {/* Power hardware footnote */}
-      <div
-        style={{
-          padding: '8px 16px',
-          borderTop: '1px solid var(--demo-border)',
-          fontSize: 11,
-          color: 'var(--demo-text-muted)',
-          lineHeight: 1.5,
-          background: 'var(--demo-surface)',
-          flexShrink: 0,
-        }}
-      >
-        <strong style={{ color: '#78a9ff' }}>IBM Power</strong> · Source 1 runs on a real
-        IBM Power LPAR. This dashboard and continuous detector run on a RHEL/IBM Power VM — genuine Power
-        hardware, with built-in MMA acceleration ready for optional on-box AI scoring.
+            {/* Source cards */}
+            <div
+              style={{
+                flex: 1,
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                overflowY: 'auto',
+              }}
+            >
+              {SOURCES.map((s) => (
+                  <SourceCard
+                    key={s.number}
+                    {...s}
+                    isSecurity={isSecurity}
+                    isTechnical={isTechnical}
+                    isExecutive={isExecutive}
+                    isOperations={isOperations}
+                  />
+                ))}
+            </div>
+
+            {/* Power hardware footnote */}
+            <div
+              style={{
+                padding: '8px 16px',
+                borderTop: '1px solid var(--demo-border)',
+                fontSize: 11,
+                color: 'var(--demo-text-muted)',
+                lineHeight: 1.5,
+                background: 'var(--demo-surface)',
+                flexShrink: 0,
+              }}
+            >
+              <strong style={{ color: '#78a9ff' }}>IBM Power</strong> · Source 1 runs on a real
+              IBM Power LPAR. This dashboard and continuous detector run on a RHEL/IBM Power VM — genuine Power
+              hardware, with built-in MMA acceleration ready for optional on-box AI scoring.
+            </div>
+          </>
+        )}
+
+        {activeTab === 'live-query' && query && (
+          <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--demo-text)', marginBottom: 4 }}>
+                {query.title}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--demo-text-muted)', marginBottom: 12 }}>
+                {query.description}
+              </div>
+              {queryExecuting && (
+                <div style={{
+                  padding: '8px 12px',
+                  background: '#1a1a2e',
+                  border: '1px solid var(--demo-blue)',
+                  borderRadius: 2,
+                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 11,
+                  color: 'var(--demo-blue)',
+                  fontWeight: 600,
+                  fontFamily: 'IBM Plex Mono, monospace',
+                }}>
+                  <span style={{
+                    width: 14, height: 14, borderRadius: '50%',
+                    border: '2px solid var(--demo-blue)', borderTopColor: 'transparent',
+                    animation: 'spin 1s linear infinite',
+                    }} />
+                    Executing federated query across 3 sources... {'<2s'}
+                  </div>
+              )}
+            </div>
+            <div style={{
+              background: '#0d0d0d',
+              border: '1px solid var(--demo-border)',
+              borderRadius: 2,
+              padding: '16px',
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 10,
+              lineHeight: 1.6,
+              color: '#b8e6b8',
+              overflowX: 'auto',
+              whiteSpace: 'pre',
+            }}>
+              {query.sql}
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: 'var(--demo-text-muted)', lineHeight: 1.5 }}>
+              <strong>Sources joined:</strong>
+              <span style={{ marginLeft: 8, color: '#4589ff' }}>IBM i (ibmi_olist)</span>
+              <span style={{ marginLeft: 8, color: '#be95ff' }}>EDB Postgres (pg_olist)</span>
+              <span style={{ marginLeft: 8, color: '#08bdba' }}>Iceberg (retail_signals)</span>
+              <br />
+              <strong>Execution:</strong> Presto (watsonx.data) federated query, zero-ETL, {'<2s typical'}.
+              <br />
+              <strong>Production note:</strong> Same SQL auto-executed by stream processor on signal match.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

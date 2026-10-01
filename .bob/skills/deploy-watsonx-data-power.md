@@ -2,12 +2,11 @@
 name: deploy-watsonx-data-power
 description: >
   Full deployment guide for the watsonx.data on IBM Power presales demo on a fresh set
-  of TechZone environments. Covers watsonx.data SaaS provisioning, IBM i data load,
-  PostgreSQL 16 install and load, federation connector configuration, and demo UI deploy.
-  Supports both DB path variants: Path A (IBM i + PostgreSQL) and Path B (AIX + EDB/PostgreSQL).
-  Also covers demo reset, re-run, and known failure modes.
-version: 1.0.0
-author: EMEA AI on IBM Power Squad
+  of TechZone environments. Covers watsonx.data Developer Base Image reservation, IBM i
+  data load, PostgreSQL 16 install and load, federation connector registration via the
+  Dev Image UI, and demo UI deploy. Supports both DB path variants: Path A (IBM i +
+  PostgreSQL) and Path B (PostgreSQL only). Also covers demo reset, re-run, and known
+  failure modes.
 globs:
   - "setup/**"
   - "demo-ui/**"
@@ -23,6 +22,12 @@ You are deploying the **watsonx.data on IBM Power** presales demo on fresh TechZ
 This skill tells you exactly what to run, in what order, with what parameters, and what to check
 after each step.
 
+**Primary architecture (confirmed working):**
+- **watsonx.data:** Developer Base Image 2.2.0 GA — VMware, TechZone `eu-de`
+- **Presto:** Basic auth `ibmlhadmin` / `password` — no IAM, no API keys
+- **On-prem data:** IBM i + RHEL on the combined TxC Lab reservation (same network pod)
+- **Connectivity:** IBM Cloud Satellite tunnel (RHEL agent → IBM Cloud) for federation endpoints
+
 ---
 
 ## What You Need Before Starting
@@ -31,18 +36,21 @@ Confirm you have the following before running any commands:
 
 | Item | Source | Notes |
 |------|--------|-------|
-| watsonx.data IBM Cloud API key | IBM Cloud → IAM → Service credentials | Must have Manager role on the instance |
-| watsonx.data instance CRN | IBM Cloud resource details | Looks like `crn:v1:bluemix:...` |
-| watsonx.data COS bucket name | From the TechZone reservation details | Used by Iceberg catalog |
-| watsonx.data Presto engine ID | watsonx.data console → Infrastructure → Presto engine name | E.g. `presto-demo` |
-| IBM i FQDN or IP | TechZone reservation details | Path A only |
-| IBM i SSH private key path | Downloaded from TechZone reservation details (User Private SSH Key) | Path A only |
-| IBM i `*SECOFR` user credentials | TechZone reservation details | Path A only |
-| RHEL VM FQDN | TechZone reservation details | Both paths |
+| watsonx.data Dev Image FQDN | TechZone reservation details | E.g. `eu-de.services.cloud.techzone.ibm.com` |
+| watsonx.data Dev Image Presto port | TechZone reservation details | Noted as "Presto" port, e.g. `46662` |
+| IBM i FQDN or IP | TechZone combined reservation details | Path A only |
+| IBM i SSH private key path | Downloaded from TechZone reservation details | Path A only |
+| IBM i SSH user | TechZone reservation details (e.g. `U8GO7IL`) | Path A only |
+| IBM i OS password | TechZone reservation details | Used as Db2 for i JDBC auth password |
+| RHEL VM FQDN | TechZone combined reservation details | Both paths |
 | RHEL VM SSH private key path | Downloaded from TechZone reservation details | Both paths |
+| RHEL VM SSH user | TechZone reservation details (e.g. `U8GO7IL`) | Both paths |
 | Local path to this repo | Workspace root | `c:\Users\...\watsonx-data-power-demo` or equiv |
 
 **IBM VPN must be active** — all TechZone environments are intranet-only.
+
+**No IBM Cloud API key is needed.** The Dev Image uses Basic auth (`ibmlhadmin`/`password`) —
+no IAM tokens, no Service IDs, no CRNs.
 
 ---
 
@@ -50,14 +58,10 @@ Confirm you have the following before running any commands:
 
 Ask the user which path applies if not already stated:
 
-- **Path A (IBM i + PostgreSQL):** Customer runs IBM i. IBM i = Source 1 (core ERP). PostgreSQL = Source 2 (operational DB). Use this path by default.
-- **Path B (AIX + EDB):** Customer runs Oracle on AIX. No IBM i. PostgreSQL (EDB-positioned) = both Source 1 and Source 2 (full Olist dataset). The database is community PostgreSQL 16 running the EDB story — Oracle-compatible positioning without Oracle licensing. Skip all IBM i steps below.
-
-> **On "EDB" in Path B:** EDB Postgres Advanced Server is the Oracle-compatible build of PostgreSQL.
-> The watsonx.data JDBC connector treats it identically to community PostgreSQL. For demo deployment,
-> community PostgreSQL 16 (PGDG repo) is used — the EDB Advanced Server repo at
-> `downloads.enterprisedb.com` requires a token and publishes no ppc64le packages (404 confirmed).
-> The demo story and audience positioning as "EDB replacing Oracle" is accurate regardless.
+- **Path A (IBM i + PostgreSQL):** Customer runs IBM i. IBM i = Source 1 (core ERP / Db2 for i).
+  PostgreSQL = Source 2 (operational DB). Use this path by default.
+- **Path B (PostgreSQL only):** No IBM i. PostgreSQL holds the full Olist dataset.
+  Skip all IBM i steps below.
 
 ---
 
@@ -83,44 +87,28 @@ If SSH fails:
 
 ---
 
-## Step 1 — Provision watsonx.data SaaS
+## Step 1 — Reserve the watsonx.data Developer Base Image
 
-> **⚠️ CRITICAL — Accept the IBM Cloud invitation BEFORE opening the watsonx.data console**
-> On a fresh TechZone reservation, an `itz-watsonx` account invitation arrives in the IBM Cloud
-> notification bell (not by email). You **must** accept it via the bell in your normal IBM ID
-> session at cloud.ibm.com **before** opening the watsonx.data console for the first time.
-> If the console is opened first, MDS initialises under the wrong account identity and the instance
-> is permanently broken — symptom: *"tls: failed to verify certificate: x509: certificate signed
-> by unknown authority"* when the first-run wizard tries to complete. The only fix is to delete
-> the reservation and provision a fresh one.
->
-> **Correct sequence:**
-> 1. TechZone reservation reaches **Ready**
-> 2. Open **cloud.ibm.com** (IBM ID, normal browser) → click notification bell → accept invite
-> 3. Only now open the watsonx.data console via `https://cloud.ibm.com/authorize/itzwatsonx` in incognito
-> 4. Complete the first-run wizard (Presto C++ → Starter → skip Spark → accept discovered COS bucket → `iceberg_data` catalog name → Finish and go)
-> 5. Once the main UI loads, MDS is initialised — run `setup/4-provision-via-rest-api.py`
+**This is a v1 TechZone environment — manual reservation only. Bob cannot reserve it automatically.**
 
-Run the provisioning script to configure Presto, Iceberg catalog, and COS connector:
+Go to: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
 
-```bash
-cd setup/
-python 4-provision-via-rest-api.py \
-  --api-key "<IBM_CLOUD_API_KEY>" \
-  --crn "<INSTANCE_CRN>" \
-  --cos-bucket "<COS_BUCKET_NAME>" \
-  --engine-id "<PRESTO_ENGINE_ID>"
-```
+Select: **watsonx.data Developer Base Image** (environment ID `6aad32346d68a71f122a688d`)
 
-**What this does:** Creates the Iceberg catalog (`iceberg_data`), registers the COS storage
-connector, and verifies the Presto engine can see the catalog via `SHOW CATALOGS`.
+From the reservation details page, note:
+- The **FQDN** — e.g. `eu-de.services.cloud.techzone.ibm.com`
+- The **Presto port** — e.g. `46662`
+- The **watsonx.data UI port** — e.g. `48544`
+- The **SSH port** — e.g. `33130` (for direct OS access if needed)
 
-**Verify:**
-```bash
-# Script prints: "✅ SHOW CATALOGS returned: iceberg_data2, system, ..."
-# If it fails with 401: API key is wrong or has insufficient permissions
-# If it fails with 409 (conflict): catalog already exists — safe to skip, or delete and re-run
-```
+**Credentials are fixed for all Dev Image reservations:**
+| Service | Username | Password |
+|---------|----------|---------|
+| Presto (Basic auth) | `ibmlhadmin` | `password` |
+| watsonx.data UI | `ibmlhadmin` | `password` |
+| SSH (OS) | `watsonx` | `watsonx.data` |
+
+Wait for the reservation status to show **Ready** before continuing.
 
 ---
 
@@ -167,6 +155,19 @@ ssh -i <ibmi-key> <ibmi-user>@<ibmi-fqdn> 'system "RUNSQLSTM SRCSTMF(\"/tmp/sect
 
 **Verify:** `SELECT SECTOR, COUNT(*) FROM OLIST.PRODUCTS GROUP BY SECTOR` should return 9 rows.
 
+### 2d. Apply compatibility views (required for watsonx.data federation)
+
+IBM i `CHAR(N)` columns cause `Unknown type char(N)` errors in Presto. The fix is a set of
+views that cast all key columns to `VARCHAR`.
+
+```bash
+ssh -i <ibmi-key> <ibmi-user>@<ibmi-fqdn> 'cat > /tmp/compat.sql' < setup/10-ibmi-compat-views.sql
+ssh -i <ibmi-key> <ibmi-user>@<ibmi-fqdn> 'system "RUNSQLSTM SRCSTMF(\"/tmp/compat.sql\") COMMIT(*NONE)"'
+```
+
+Creates: `OLIST.V_CUSTOMERS`, `OLIST.V_PRODUCTS`, `OLIST.V_ORDERS`, `OLIST.V_ORDERITEMS`.
+The federation queries use these views, not the base tables.
+
 ---
 
 ## Step 3 — Install PostgreSQL on RHEL and Load Data
@@ -186,6 +187,10 @@ python setup/8-load-edb-olist.py \
 This installs **PostgreSQL 16** via the PGDG repo (`download.postgresql.org` — no token required),
 initialises the cluster on port **5432**, creates the `olist` database, and runs
 `setup/7-edb-olist-ddl.sql` via SSH.
+
+**Note on EDB AS:** The EDB Advanced Server repo at `downloads.enterprisedb.com` requires a
+token and publishes no ppc64le packages — it returns 404. The script falls back automatically
+to community PostgreSQL 16, which is functionally identical for watsonx.data federation.
 
 Tables created:
 - `olist.tier2_suppliers` — 50 fictional tier-2 sub-contractors (4 pre-seeded COMPROMISED)
@@ -211,7 +216,7 @@ All data is loaded entirely over SSH via `psql COPY FROM STDIN` — **no local p
 installs required**. At the end the script prints the 4 COMPROMISED tier-2 companies:
 `Nexaflow Logistics Ltd, Alderton Supply Chain Services, Castleton Supply Technologies, Greystone Supply Chain`.
 
-**For Path B (AIX+EDB) — extend load to include full Olist dataset:**
+**For Path B (PostgreSQL only) — extend load to include full Olist dataset:**
 
 Add the `--full-dataset` flag to also load CUSTOMERS, PRODUCTS, ORDERS, ORDERITEMS into PostgreSQL
 (in addition to the supplier tables above). This flag is Path B only.
@@ -225,189 +230,194 @@ python setup/8-load-edb-olist.py \
 
 ---
 
-## Step 3b — Install IBM Cloud Satellite Connector agent on RHEL
+## Step 3b — Set IBM i Password for Db2 Authentication (Path A only)
 
-This step bridges IBM Cloud (watsonx.data SaaS) → PowerVS private network so the Presto engine
-can reach both the RHEL PostgreSQL and the IBM i Db2 endpoints via Satellite Link endpoints.
-
-**Use Satellite Connector, not Satellite Location.** Connector is a lightweight Docker container
-agent — no worker nodes, no infrastructure provisioning, ready in minutes. Location is a full
-infrastructure deployment designed for running IBM Cloud services on-premises; it is overkill
-here and requires permissions that may not be available in TechZone accounts.
-
-**Confirmed working pattern (from Hybrid-by-Design Orchestrate demo):**
-- Satellite Connector lives in the **same IBM Cloud account and same reservation** as the SaaS service
-- Connector agent runs as a **Docker container on the RHEL VM** — outbound connections only
-- IBM Cloud CLI (`ibmcloud`) used to create the Connector and Link endpoints
-- IBM i does not run any agent — its `:8471` port is a destination reached via RHEL's
-  private network access to IBM i (both on the same PowerVS private subnet)
-
-**Prerequisites:**
-- `ibmcloud` CLI installed locally with `satellite` plugin: `ibmcloud plugin install satellite`
-- Logged in to the same IBM Cloud account as the watsonx.data SaaS instance
-- Docker installed on the RHEL VM: `sudo dnf install -y docker && sudo systemctl enable --now docker`
+**Do this before Step 4.** The IBM i OS password changes with every TechZone reservation. SSH uses
+key auth so connectivity works fine, but Db2 DRDA authentication (used by watsonx.data federation)
+validates the OS password directly. If this step is skipped, the `ibmi_olist` connector will fail
+with an authentication error.
 
 ```bash
-# 1. Create the Satellite Connector (on your local machine, ibmcloud CLI)
-ibmcloud sat connector create --name wxd-power-demo --region eu-gb
-
-# 2. Retrieve the Connector ID
-CONNECTOR_ID=$(ibmcloud sat connector ls --output json | python3 -c \
-  "import sys,json; cs=json.load(sys.stdin); \
-   print(next(c['id'] for c in cs if c['name']=='wxd-power-demo'))")
-echo "Connector ID: $CONNECTOR_ID"
-
-# 3. Generate the agent token for the RHEL VM
-ibmcloud sat connector create-agent --connector-id $CONNECTOR_ID
-
-# 4. Pull and run the Connector agent on the RHEL VM
-#    Replace <AGENT_TOKEN> with the token generated in step 3
-ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> "sudo docker run -d \
-  --name satellite-connector-agent \
-  --restart always \
-  -e SATELLITE_CONNECTOR_ID=$CONNECTOR_ID \
-  -e SATELLITE_CONNECTOR_AGENT_TOKEN=<AGENT_TOKEN> \
-  icr.io/ibm/satellite-connector/satellite-connector-agent:latest"
+python3 setup/0-set-ibmi-password.py \
+  --host <ibmi-ip> \
+  --user <ibmi-user> \
+  --key  "<path-to-ibmi-key>" \
+  --password '<ibmi-os-password>'
 ```
 
-**Verify agent is registered:**
-In IBM Cloud console → Satellite → Connectors → `wxd-power-demo` → Agents:
-the RHEL VM should appear with status **Connected** (takes 1–3 minutes).
+All four values are on the TechZone reservation details page for the combined IBM i + RHEL reservation.
 
-```bash
-# Or via CLI:
-ibmcloud sat connector get --connector-id $CONNECTOR_ID
-```
-
-**Create Link endpoints** — automated script:
-
-Run the included automated endpoint setup script. `--ibmi-ip` is the on-prem IP of the IBM i
-VM from the TechZone reservation details:
-
-```bash
-python setup/satellite-endpoints.py \
-  --api-key "<IBM_CLOUD_API_KEY>" \
-  --account-id "<ACCOUNT_ID>" \
-  --connector-id "<CONNECTOR_ID>" \
-  --ibmi-ip "<IBMI_IP_FROM_TECHZONE>"
-```
-
-This creates the two Link endpoints (if not already present) and prints a summary including the
-cloud-side hostnames and ports assigned by Satellite.
+**Expected output:** `Password set for <USER> on IBM i at <IP>.`
 
 ---
 
-## Step 4 — Configure watsonx.data Federation Connectors
+## Step 4 — Configure IBM Cloud Satellite (connects Dev Image to on-prem data)
 
-The federation connector script requires the Satellite Link hostnames and ports from Step 3b.
-**These change with every reservation** — never hardcode them.
+The Dev Image runs in IBM Cloud (`eu-de`). Your on-prem data (IBM i, PostgreSQL) is on the
+TechZone intranet. IBM Cloud Satellite Connector bridges them.
 
-> **Why does this need the IBM i OS password?**
-> The SSH key is used only to SSH into the RHEL VM. The IBM i OS password is different — it is
-> stored by watsonx.data and used by the Presto engine to open **JDBC connections to Db2 for i**
-> (port 8471, DDM protocol) at query time. Db2 for i DDM authenticates with OS username/password;
-> it has no concept of SSH keys. The password comes from the TechZone reservation details page
-> (same credentials used when you SSH into the IBM i from the VPN).
+### 4a. Reserve a Satellite Connector
 
-### Option A — one-liner chain (recommended)
+Go to: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
 
-`satellite-endpoints.py --output-env` emits shell `export` lines; `eval $()` sets them in the
-current shell. All status output goes to stderr so `eval` only sees the four exports:
+Select the **IBM Cloud Satellite** environment and reserve it. From the reservation details:
+- Note the **IBM Cloud account** (usually `ITZ-V2`)
+- Accept the account invite via the **notification bell** at cloud.ibm.com (not email)
+
+### 4b. Start the Satellite agent on the RHEL VM
 
 ```bash
-# 1. Create/verify endpoints AND export the hostnames/ports into the current shell
-eval $(python setup/satellite-endpoints.py \
-  --api-key "<IBM_CLOUD_API_KEY>" \
-  --account-id "<ACCOUNT_ID>" \
-  --connector-id "<CONNECTOR_ID>" \
-  --ibmi-ip "<IBMI_IP_FROM_TECHZONE>" \
-  --output-env)
+# Download the agent start script from the Satellite console:
+# IBM Cloud → Satellite → Connectors → <your connector> → Download agent start script
 
-# 2. Run the federation connector script using those exported values
-WXD_APIKEY="<STUDENT_API_KEY>" \
-WXD_INSTANCE_CRN="<INSTANCE_CRN>" \
-IBMI_HOST=$IBMI_SAT_HOST \
-IBMI_PORT=$IBMI_SAT_PORT \
-IBMI_USERNAME="<IBMI_OS_USER>" \
-IBMI_PASSWORD="<IBMI_OS_PASSWORD>" \
-PG_HOST=$PG_SAT_HOST \
-PG_PORT=$PG_SAT_PORT \
-python setup/5-add-federation-connectors.py
+# Copy to RHEL and run
+scp -i <rhel-key> connector-agent-start.sh <rhel-user>@<rhel-fqdn>:~/
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> 'chmod +x ~/connector-agent-start.sh && ~/connector-agent-start.sh'
 ```
 
-### Option B — two separate steps
+**Verify:** In the Satellite console, the connector status should show **Connected**.
+
+### 4c. Create Link endpoints
+
+In the IBM Cloud Satellite console, create these **Location** endpoints (IBM Cloud → on-prem):
+
+| Name | Destination host | Destination port | Protocol |
+|------|-----------------|-----------------|---------|
+| `pg-olist` | `127.0.0.1` (localhost on RHEL) | `5432` | TCP |
+| `ibmi-db2` | `<ibmi-ip>` (e.g. `129.40.125.73`) | `8471` | TCP |
+
+Each endpoint gets a cloud hostname like `c-01.private.eu-gb.link.satellite.cloud.ibm.com:<port>`.
+Note the assigned port numbers — you will use them in Step 5.
+
+**Enable** each endpoint after creation (toggle in the console).
+
+---
+
+## Step 5 — Register Federation Connectors
+
+Run the registration script. It handles catalog registration, engine association, and access
+control grants in one command — and triggers the policy version bump so Presto picks up the
+grants immediately without a full restart:
 
 ```bash
-# Step 1: get the Satellite Link hostnames/ports (human-readable)
-python setup/satellite-endpoints.py \
-  --api-key "<IBM_CLOUD_API_KEY>" \
-  --account-id "<ACCOUNT_ID>" \
-  --connector-id "<CONNECTOR_ID>" \
-  --ibmi-ip "<IBMI_IP_FROM_TECHZONE>"
-# Read the "Cloud Host" lines from the output, then:
-
-# Step 2: feed them explicitly as CLI args
-python setup/5-add-federation-connectors.py \
-  --wxd-apikey "<STUDENT_API_KEY>" \
-  --wxd-crn "<INSTANCE_CRN>" \
-  --ibmi-host "<IBMI_SAT_HOST>" \
-  --ibmi-port "<IBMI_SAT_PORT>" \
-  --ibmi-username "<IBMI_OS_USER>" \
-  --ibmi-password "<IBMI_OS_PASSWORD>" \
-  --pg-host "<PG_SAT_HOST>" \
-  --pg-port "<PG_SAT_PORT>"
+IBMI_PASSWORD='<ibmi-os-password>' \
+IBMI_USERNAME='<ibmi-user>' \
+IBMI_DATABASE='<ibmi-rdb-name>' \
+IBMI_PORT=<satellite-ibmi-port> \
+PG_PORT=<satellite-pg-port> \
+python3 setup/7-register-catalogs.py
 ```
 
-For **Path B** (no IBM i), add `--pg-only` and omit the `--ibmi-*` args:
+- `IBMI_PASSWORD` — IBM i OS password (from TechZone reservation details, changes every reservation)
+- `IBMI_USERNAME` — IBM i SSH/OS user (e.g. `UVU2BTL`) — from TechZone reservation details
+- `IBMI_DATABASE` — IBM i RDB name (e.g. `PVM02XU9`) — find it with:
+  ```bash
+  ssh -i <ibmi-key> <ibmi-user>@<ibmi-fqdn> 'system "DSPRDBDIRE" | grep LOCAL'
+  ```
+- `IBMI_PORT` / `PG_PORT` — Satellite Link endpoint ports assigned in Step 4c
+- All other values (Dev Image host/port/credentials, PostgreSQL credentials) are hardcoded
+  defaults and do not change between reservations.
+
+**Expected output:**
+```
+Step 1: Register catalogs in ibm_lh_repo  → INSERT 0 2 (or 0 0 if already present)
+Step 2: Insert AMS access control rows    → INSERT 0 4 / INSERT 0 2
+Step 3: Bump policy version               → {"policy_version": <n>}
+Waiting 10s for Presto PolicySyncMgr to reload...
+Done.
+```
+
+**Verify** (should return rows immediately after the script completes):
 ```bash
-python setup/5-add-federation-connectors.py \
-  --wxd-apikey "<STUDENT_API_KEY>" \
-  --wxd-crn "<INSTANCE_CRN>" \
-  --pg-host "<PG_SAT_HOST>" \
-  --pg-port "<PG_SAT_PORT>" \
-  --pg-only
+python3 setup/test_cross_catalog_join.py
 ```
 
-**API field note:** The watsonx.data v3 REST API uses `display_name` / `type` / `connection`
-(not `database_display_name` / `database_type` / `details`) — confirmed via live probing.
-Port must be an integer. `5-add-federation-connectors.py` uses the correct field names.
+### If the script succeeds but catalogs still don't appear in SHOW CATALOGS
 
-**Verify connectors** in the watsonx.data Query workspace:
-```sql
-SHOW SCHEMAS IN ibmi_olist;                            -- should show: OLIST  (Path A)
-SHOW SCHEMAS IN pg_olist;                              -- should show: olist
-SELECT COUNT(*) FROM pg_olist.olist.tier2_suppliers;   -- should show: 50
-SHOW CATALOGS;                                         -- should include: iceberg_data2
+The only remaining step is a Presto restart to regenerate `.properties` files:
+```bash
+# SSH into Dev Image and restart Presto
+ssh -p 49753 watsonx@eu-de.services.cloud.techzone.ibm.com \
+  'sudo docker restart ibm-lh-presto'
+```
+Wait ~60s then retry `test_cross_catalog_join.py`.
+
+### GUI fallback (if the script fails)
+
+Open `https://<dev-image-fqdn>:<ui-port>` — login `ibmlhadmin` / `password`
+
+1. **Infrastructure Manager → Add Component → Database** — register each connector
+   (if not already visible; the script's catalog rows mean they often already appear)
+2. **Access Control → Catalogs → `pg_olist` → Add access** → add `ibmlhadmin` → Administrator
+3. **Access Control → Catalogs → `ibmi_olist` → Add access** → add `ibmlhadmin` → Administrator
+4. Restart Presto once after both grants are saved
+
+**Note on GUI permissions errors:** The Dev Image GUI may show permission errors when editing
+existing entries. This is a cosmetic issue with the GUI's edit path — the Add access action
+(creating a new entry) works correctly even when Edit is blocked.
+
+---
+
+## Step 6 — Write .env.local on RHEL
+
+```bash
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> 'cat > ~/watsonx-data-power-demo/demo-ui/.env.local' << 'EOF'
+WXD_PRESTO_HOST=<dev-image-fqdn>
+WXD_PRESTO_PORT=<presto-port>
+WXD_PRESTO_SCHEME=https
+WXD_PRESTO_USER=ibmlhadmin
+WXD_PRESTO_PASSWORD=password
+WXD_PG_CATALOG=pg_olist
+WXD_IBMI_CATALOG=ibmi_olist
+EOF
+```
+
+Replace `<dev-image-fqdn>` and `<presto-port>` with the values from Step 1.
+
+**No `WXD_APIKEY`, `WXD_INSTANCE_CRN`, or `LhInstanceId` needed.** The Dev Image uses Basic
+auth and does not require IAM headers.
+
+**Verify the file was written correctly:**
+```bash
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> 'cat ~/watsonx-data-power-demo/demo-ui/.env.local'
 ```
 
 ---
 
-## Step 5 — Wire POS Event Generator to Iceberg
+## Step 7 — Deploy the Demo UI
 
-```bash
-# On the RHEL VM
-scp -i <rhel-key> event-generators/retail-pos-events.py <rhel-user>@<rhel-fqdn>:~/
-ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
-  'nohup python3 ~/retail-pos-events.py \
-     --cos-bucket <COS_BUCKET_NAME> \
-     --api-key <IBM_CLOUD_API_KEY> \
-     > ~/pos-events.log 2>&1 & echo started'
-```
-
-**Verify:** Check `~/pos-events.log` on the RHEL VM after 30 seconds — should show rows being written.
-
----
-
-## Step 6 — Deploy the Demo UI
-
-### 6a. Sync files to RHEL VM
+### 7a. Sync files to RHEL VM
 
 ```bash
 # From workspace root (Windows: use scp -r or rsync via WSL)
 scp -r -i <rhel-key> demo-ui/ <rhel-user>@<rhel-fqdn>:~/watsonx-data-power-demo/demo-ui/
 ```
 
-### 6b. Install dependencies and build
+### 7b. Install Node.js (version matters — check RHEL release first)
+
+Next.js 13.4.9 requires Node ≥ 18. RHEL's default dnf stream ships Node 16 on RHEL 9 — too old.
+
+```bash
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> "cat /etc/redhat-release"
+
+# RHEL 9.x — enable Node 20 module stream:
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
+  "sudo dnf module enable -y nodejs:20 && sudo dnf install -y nodejs && node --version"
+# Expected: v20.x.x
+
+# RHEL 10.x — Node 22 ships directly from AppStream (modularity removed in RHEL 10):
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
+  "sudo dnf install -y nodejs && node --version"
+# Expected: v22.x.x
+```
+
+**Important — fix permissions before npm install:** `scp -r` transfers directories as `dr-x------`
+(no write bit). Always run this after scp:
+```bash
+ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> "chmod -R u+rwX ~/watsonx-data-power-demo"
+```
+
+### 7c. Install dependencies and build
 
 ```bash
 ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
@@ -419,7 +429,7 @@ ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
 - `SWC binary missing` → confirm Next.js is 13.4.9 (`cat package.json | grep '"next"'`)
 - TypeScript errors → check for stray `.tsx` files in `src/pages/api/` (should only be `.ts` files there)
 
-### 6c. Start the UI
+### 7d. Start the UI
 
 ```bash
 ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
@@ -427,7 +437,7 @@ ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
 # Note: this command will show CANCELED in Bob UI — that is expected (nohup detaches)
 ```
 
-### 6d. Verify
+### 7e. Verify
 
 ```bash
 ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
@@ -436,26 +446,34 @@ ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
 ```
 
 **The CANCELED status on the restart step is a known cosmetic issue.** The only reliable
-confirmation is step 6d returning `200`. Do not skip the verification step.
+confirmation is step 7e returning `200`. Do not skip the verification step.
 
 ---
 
-## Step 7 — Smoke Test End-to-End
+## Step 8 — Smoke Test End-to-End
 
 1. Open `http://<rhel-fqdn>:3000` in a browser (IBM VPN active)
 2. Confirm the static report page (`/`) loads with product metrics
-3. Navigate to `/sources` — confirm three source cards are visible
+3. Navigate to `/sources` — confirm source cards are visible
 4. Navigate to `/live?scenario=cyber` — confirm the POS stream is scrolling
 5. Click **"Inject Cyber Signal"** — confirm an alert card appears within 3 seconds
-6. Navigate to `/outcome?scenario=cyber` — confirm the timeline shows cyber outcome
-7. Click **"Clear & reset"** on `/live?scenario=cyber`, then navigate to `/live?scenario=wildfire`
-8. Click **"Inject Wildfire Signal"** — confirm a wildfire alert card appears
-9. Navigate to `/outcome?scenario=wildfire` — confirm wildfire timeline
+6. The alert card should show `source: "live"` and data for a COMPROMISED supplier
+7. Navigate to `/outcome?scenario=cyber` — confirm the timeline shows cyber outcome
+8. Click **"Clear & reset"**, then navigate to `/live?scenario=wildfire`
+9. Click **"Inject Wildfire Signal"** — confirm a wildfire alert card appears
+10. Navigate to `/outcome?scenario=wildfire` — confirm wildfire timeline
 
 If alert cards do not appear:
 - Check `~/demo-ui.log` on the RHEL VM for errors
-- Confirm `/tmp/wxd-demo-signals.json` and `/tmp/wxd-demo-alerts.json` are writable (`chmod 666`)
-- Confirm the PostgreSQL connection string in the UI env is correct (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASS`)
+- Confirm `.env.local` has correct `WXD_PRESTO_HOST` and `WXD_PRESTO_PORT`
+- Run a direct Presto query from RHEL to confirm Basic auth works:
+  ```bash
+  curl -s -u ibmlhadmin:password \
+    "https://<dev-image-fqdn>:<presto-port>/v1/statement" \
+    -H "Content-Type: text/plain" \
+    --data "SHOW CATALOGS" -k | head -50
+  ```
+  Expected: JSON response containing `pg_olist` and `ibmi_olist`
 
 ---
 
@@ -473,12 +491,12 @@ ssh -i <rhel-key> <rhel-user>@<rhel-fqdn> \
 
 ## SSH / Remote Command Patterns
 
-These patterns were validated on RHEL 10.2 / ppc64le. Use them to avoid common pitfalls:
+These patterns were validated on RHEL 9.8 / ppc64le. Use them to avoid common pitfalls:
 
 | Pattern | Command |
-|---------|---------|
+|---------|---------| 
 | Kill whatever is on port 3000 | `kill -9 $(ss -tlnp \| grep 3000 \| grep -oP "pid=\K[0-9]+") 2>/dev/null` |
-| Non-blocking start (nohup pattern) | `nohup npm start > ~/demo-ui.log 2>&1 & disown; echo started` |
+| Non-blocking start (setsid pattern) | `PORT=3000 setsid npm start >> ~/demo-ui.log 2>&1 & echo started` |
 | Verify port 3000 is up | `sleep 5 && curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/` |
 | Single-quote outer SSH arg | Use single quotes to wrap the entire remote command when it contains double quotes |
 | CANCELED on nohup steps | **Expected** — always follow with the curl verification step |
@@ -490,12 +508,34 @@ These patterns were validated on RHEL 10.2 / ppc64le. Use them to avoid common p
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `EADDRINUSE :3000` on restart | Previous Next.js process still running | Run the kill-port-3000 pattern above, then restart |
-| Alert cards don't appear after inject | File store not writable or wrong path | `chmod 666 /tmp/wxd-demo-*.json`; check `~/demo-ui.log` |
+| Alert cards don't appear after inject | Dev Image Presto not reachable or `.env.local` wrong | Check `~/demo-ui.log`; verify `.env.local` vars; run direct curl test from RHEL |
+| Presto returns 401 | Wrong Basic auth credentials | Dev Image always uses `ibmlhadmin`/`password` — confirm no typos in `.env.local` |
+| Presto returns SSL/cert error | Dev Image uses self-signed cert | `WXD_PRESTO_SCHEME=https` is correct; the UI client skips cert verification already |
 | IBM i SSH fails with `Permission denied` | Wrong key or wrong user | Download key from TechZone reservation details; confirm user has `*SECOFR` |
 | CPYFRMIMPF fails with `MSGID(CPF2817)` | Existing rows in target table | DDL uses DROP+CREATE; re-run `--create-schema` then `--load-data` |
-| `pg_olist` connector fails in watsonx.data | Connector not yet wired | Follow `setup/2-configure-federation.md` step 2 |
+| `ibmi_olist` connector fails in watsonx.data | Wrong RDB name or CHAR type error | Confirm RDB name via `DSPRDBDIRE`; confirm compat views from Step 2d exist |
+| `Unknown type char(32)` from IBM i | Base tables used instead of views | Queries must target `V_CUSTOMERS` etc. not `CUSTOMERS`; check compat views |
+| `pg_olist` connector fails in watsonx.data | Wrong Satellite endpoint port | Confirm the Satellite endpoint for pg-olist is enabled and note the correct port |
+| Satellite agent shows Disconnected | Agent not running on RHEL | SSH in and re-run the agent start script |
+| `ibmi_olist` / `pg_olist` show "offline" in Infrastructure Manager | `lhconsole-api` connectivity probe times out through the Satellite tunnel — cosmetic only | Ignore. Verify with `test_cross_catalog_join.py` — if that returns rows, federation is working. The GUI status badge does not reflect Presto's actual query capability. |
 | `SWC binary missing` on npm run build | Next.js > 13.x | Confirm `package.json` has `"next": "13.4.9"` |
-| `Cannot find module 'live-feed-fetcher'` | Missing file on RHEL | Re-run the `scp -r demo-ui/` sync in Step 6a |
-| CISA feed fetch fails | RHEL VM has no outbound internet | TechZone RHEL VMs should have outbound; check with `curl https://www.cisa.gov` |
-| EDB AS repo returns 404 during `--install-edb` | No ppc64le packages; token required | Expected — script uses PostgreSQL 16 automatically (identical for this demo) |
+| `Cannot find module 'live-feed-fetcher'` | Missing file on RHEL | Re-run the `scp -r demo-ui/` sync in Step 7a |
+| EDB AS repo returns 404 during `--install-edb` | No ppc64le packages; token required | Expected — script falls back to PostgreSQL 16 automatically |
 | psycopg2 import error locally | Not needed | All DB ops use SSH + psql; no local psycopg2 required |
+
+---
+
+## Dev Image vs SaaS — Key Differences
+
+The demo **previously** used watsonx.data SaaS (IBM Cloud). It now uses the Developer Base Image.
+Key differences a user coming from earlier sessions should know:
+
+| | Developer Base Image (current) | watsonx.data SaaS (legacy) |
+|---|---|---|
+| TechZone env | VMware, `eu-de`, v1 | IBM Cloud, `eu-gb`, v1 |
+| Presto auth | Basic auth `ibmlhadmin`/`password` | IAM Bearer token (API key) |
+| Catalog registration | UI only (localhost API, no external access) | UI or API (API unreliable from outside IBM Cloud) |
+| Connector naming | Generic names OK (`pg_olist`, `ibmi_olist`) | Must be reservation-unique (`pg_olist_<key>`) |
+| `.env.local` vars | `WXD_PRESTO_USER`, `WXD_PRESTO_PASSWORD` | `WXD_APIKEY`, `WXD_INSTANCE_CRN` |
+| Satellite needed? | Yes — for federation endpoints only | Yes — for Presto routing AND federation |
+| Cloudflare blocking | Not applicable | Blocks external Presto calls (hard to work around) |

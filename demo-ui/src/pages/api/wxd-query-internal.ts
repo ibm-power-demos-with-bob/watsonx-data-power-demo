@@ -6,6 +6,24 @@
  * than making an HTTP round-trip to /api/wxd-query.
  *
  * Do NOT import this from browser-side code — it uses Node.js built-ins (https, http).
+ *
+ * Auth modes (controlled by .env.local):
+ *
+ *   Developer Base Image (VMware TechZone):
+ *     WXD_PRESTO_HOST=<region>.services.cloud.techzone.ibm.com
+ *     WXD_PRESTO_PORT=<mapped port from reservation, e.g. 15152>
+ *     WXD_PRESTO_SCHEME=https
+ *     WXD_PRESTO_USER=watsonx
+ *     WXD_PRESTO_PASSWORD=<password from reservation>
+ *     → Uses HTTP Basic auth. No IAM, no CRN, no API key needed.
+ *
+ *   watsonx.data SaaS (legacy — kept for reference):
+ *     WXD_PRESTO_HOST=<engine>.lakehouse.ibmappdomain.cloud
+ *     WXD_PRESTO_PORT=31437
+ *     WXD_PRESTO_SCHEME=https
+ *     WXD_APIKEY=<ibm cloud api key>
+ *     WXD_INSTANCE_CRN=crn:v1:bluemix:...
+ *     → Uses IAM Bearer token exchange.
  */
 
 import https from 'https'
@@ -14,7 +32,7 @@ import type { WxdQueryResult } from './wxd-query'
 
 const MAX_ROWS = 500
 const QUERY_TIMEOUT_MS = 90_000
-const POLL_INTERVAL_MS = 1_500
+const POLL_INTERVAL_MS = 500   // reduced from 1500ms — polls are cheap, latency matters for demo
 
 function doRequest(
   url: string,
@@ -45,7 +63,7 @@ function doRequest(
   })
 }
 
-/** Exchange an IBM Cloud API key for a short-lived IAM bearer token. */
+/** Exchange an IBM Cloud API key for a short-lived IAM bearer token (SaaS path). */
 async function getIamToken(apiKey: string): Promise<string> {
   const body = `grant_type=urn%3Aibm%3Aparams%3Aoauth%3Agrant-type%3Aapikey&apikey=${encodeURIComponent(apiKey)}`
   const resp = await doRequest('https://iam.cloud.ibm.com/identity/token', {
@@ -61,22 +79,73 @@ async function getIamToken(apiKey: string): Promise<string> {
 }
 
 export async function runPrestoQueryInternal(sql: string): Promise<WxdQueryResult> {
-  const prestoHost = process.env.WXD_PRESTO_HOST!
-  const apiKey = process.env.WXD_APIKEY!
-  const instanceCrn = process.env.WXD_INSTANCE_CRN!
+  const prestoHost = process.env.WXD_PRESTO_HOST
+  const prestoPort = process.env.WXD_PRESTO_PORT ?? '8443'
+  const prestoScheme = process.env.WXD_PRESTO_SCHEME ?? 'https'
 
-  // Presto C++ (Prestissimo) requires a Bearer IAM token, not Basic auth with the raw API key.
-  const iamToken = await getIamToken(apiKey)
-
-  const baseHeaders: Record<string, string> = {
-    Authorization: `Bearer ${iamToken}`,
-    'X-Presto-User': 'ibmcloud',
-    'X-Presto-Source': 'wxd-demo-ui',
-    'Content-Type': 'text/plain',
-    AuthInstanceId: instanceCrn,
+  if (!prestoHost) {
+    throw new Error('WXD_PRESTO_HOST is not set')
   }
 
-  const submitUrl = `https://${prestoHost}/v1/statement`
+  // ---------------------------------------------------------------------------
+  // Auth: Developer Base Image uses HTTP Basic auth with a local watsonx user.
+  // SaaS uses IAM Bearer token exchange from an IBM Cloud API key.
+  // Presence of WXD_PRESTO_USER selects the Basic auth path.
+  // ---------------------------------------------------------------------------
+  const prestoUser = process.env.WXD_PRESTO_USER
+  const prestoPassword = process.env.WXD_PRESTO_PASSWORD
+
+  let baseHeaders: Record<string, string>
+
+  if (prestoUser) {
+    // Developer Base Image — Basic auth
+    const credentials = Buffer.from(`${prestoUser}:${prestoPassword ?? ''}`).toString('base64')
+    baseHeaders = {
+      Authorization: `Basic ${credentials}`,
+      'X-Presto-User': prestoUser,
+      'X-Presto-Source': 'wxd-demo-ui',
+      'Content-Type': 'text/plain',
+    }
+  } else {
+    // SaaS — IAM Bearer token
+    const apiKey = process.env.WXD_APIKEY
+    const instanceCrn = process.env.WXD_INSTANCE_CRN
+    if (!apiKey || !instanceCrn) {
+      throw new Error('Either WXD_PRESTO_USER or (WXD_APIKEY + WXD_INSTANCE_CRN) must be set')
+    }
+    const iamToken = await getIamToken(apiKey)
+    const instanceGuid = instanceCrn.split(':').slice(-3, -2)[0] ?? ''
+    baseHeaders = {
+      Authorization: `Bearer ${iamToken}`,
+      'X-Presto-User': 'ibmcloud',
+      'X-Presto-Source': 'wxd-demo-ui',
+      'Content-Type': 'text/plain',
+      AuthInstanceId: instanceCrn,
+      LhInstanceId: instanceGuid,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Presto returns nextUri as an absolute URL using its own internal hostname.
+  // On the Developer Base Image the nextUri host/port matches what we connected
+  // to, so no rewrite is needed. On the old Satellite tunnel path (http scheme)
+  // we had to rewrite poll URLs to route through the tunnel — kept here for
+  // reference but not exercised in the current setup.
+  // ---------------------------------------------------------------------------
+  function rewriteUri(uri: string): string {
+    if (prestoScheme === 'https') return uri
+    try {
+      const u = new URL(uri)
+      u.protocol = prestoScheme + ':'
+      u.hostname = prestoHost!
+      u.port = prestoPort
+      return u.toString()
+    } catch {
+      return uri
+    }
+  }
+
+  const submitUrl = `${prestoScheme}://${prestoHost}:${prestoPort}/v1/statement`
   const submitResp = await doRequest(submitUrl, {
     method: 'POST',
     headers: baseHeaders,
@@ -121,7 +190,7 @@ export async function runPrestoQueryInternal(sql: string): Promise<WxdQueryResul
     if (!nextUri) break
 
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
-    const pollResp = await doRequest(nextUri, { headers: baseHeaders })
+    const pollResp = await doRequest(rewriteUri(nextUri), { headers: baseHeaders })
     if (pollResp.status !== 200) {
       throw new Error(`Presto poll failed: HTTP ${pollResp.status}`)
     }

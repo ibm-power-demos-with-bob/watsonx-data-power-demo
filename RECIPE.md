@@ -2,16 +2,13 @@
 name: watsonx-data-power-demo
 title: "watsonx.data on IBM Power — Zero-ETL Data Federation Demo"
 description: >
-  Deploy a live, multi-source federated data demo showing how watsonx.data
-  federates across IBM i (core ERP), PostgreSQL/EDB (operational DB), and an
-  Apache Iceberg event stream — on IBM Power. Demonstrate real-time cyber and
-  logistics signal detection with sub-second federated query response, surfaced
-  through a Carbon Design System dashboard. Two DB path variants: IBM i + PostgreSQL
-  (for IBM i customers) or AIX + EDB (for Oracle-on-AIX customers, EDB as Oracle
-  replacement). No mock UIs, no simulated data, no cloud AI dependency.
+  A platform-reality pre-sales demo showing how watsonx.data federates across IBM i (Db2),
+  PostgreSQL on RHEL/Power, and a live event stream — on IBM Power. Two scenarios: a tier-2
+  supplier cyber breach and a freight corridor closure, both surfaced via live Presto federation
+  through a Carbon Design System dashboard. No mock data, no cloud AI dependency.
 author: EMEA AI on IBM Power Squad
-version: 1.0.0
-repository: https://github.com/ibm-power-demos-with-bob/watsonx-data-power-demo
+version: 1.1.0
+recipe: 01-watsonx-data-power-demo.md
 tags:
   - ibm-power
   - watsonx-data
@@ -20,7 +17,6 @@ tags:
   - ibm-i
   - edb
   - postgresql
-  - iceberg
   - carbon-design-system
   - supply-chain
   - cyber-intelligence
@@ -32,57 +28,46 @@ skills:
   - deploy-watsonx-data-power
   - watsonx-data-power-story-builder
 modes:
-  - watsonx-data-power-demo
+  - pre-sales-demo
 techzone:
-  watsonx_data_saas:
-    collection_url: https://techzone.ibm.com/collection/watsonx-data
-    infrastructure: cloud
+  watsonx_data_dev_image:
+    collection_url: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
+    platform_id: 685705e13f60074883ce964f
+    infrastructure: ibmcloud-2
+    reservation: manual
+    auth: Basic (ibmlhadmin / password) — no IAM API key needed
     note: >
-      watsonx.data SaaS (IBM Cloud, eu-gb). Reserve as "Demo" purpose with
-      an opportunity code, or as "Test" (4-day window, no opportunity code needed).
-      Bob CANNOT auto-reserve this — manual reservation required (~5 min effort,
-      ~20 min provisioning wait).
-  ibm_i_path:
-    collection_url: https://techzone.ibm.com/collection/power-systems-with-ibm-i
+      watsonx.data Developer Base Image 2.2.0 GA. Note the FQDN, Presto port, SSH port,
+      and UI port from the reservation Published Services tab. Provisioning takes ~20 min.
+  ibm_i_plus_rhel:
+    collection_url: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
+    platform_id: 6aa0476b0e167e33005b104d
     infrastructure: systems-onprem
+    reservation: manual
     note: >
-      IBM i LPAR on Power10. Manual reservation required (v1 TechZone environment).
-      Provides the core ERP data source (Db2 for IBM i, OLIST schema).
-      Path A only — skip if running the AIX + EDB path.
-      SSH key-based auth. Download private SSH key from reservation details.
-  rhel_power10_vm:
-    collection_url: https://techzone.ibm.com/collection/generative-ai-demos-on-ibm-power
-    infrastructure: systems-2
+      Combined IBM i + RHEL on Power (TxC Lab, Poughkeepsie). Both VMs share a /28 subnet.
+      RHEL hosts PostgreSQL 16, Satellite agent, and the demo UI. IBM i hosts Db2 OLIST
+      schema (Path A only). Download the SSH private key from the reservation details.
+      Provisioning takes ~30 min.
+  satellite_connector:
+    collection_url: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
+    platform_id: 6a8eefb1116ff35215509bbd
+    infrastructure: ibmcloud-2
+    reservation: manual
     note: >
-      RHEL on Power10 (ppc64le). Manual reservation required (v1 TechZone environment).
-      Hosts PostgreSQL 16 (EDB-positioned operational/ERP DB) and the Next.js demo UI.
-      Required for both paths. For Path B (AIX+EDB), holds the full Olist dataset.
+      IBM Cloud Satellite Connector (ITZ-V2 account). Bridges the Dev Image (eu-de) to the
+      on-prem RHEL/IBM i environments via Link endpoints on ports :5432 (PostgreSQL) and
+      :8471 (IBM i DRDA). The Satellite Connector ID and IAM API key are stable across
+      reservations for the same IBM Cloud account — already in setup/_start_satellite_agent.py.
+      Accept the ITZ-V2 account invite via the IBM Cloud notification bell before use.
+      Provisioning takes ~5 min.
 db_path_variants:
-  ibm_i_plus_postgresql:
-    description: Default path — IBM i (Db2) as ERP source, PostgreSQL 16 as operational DB
-    audience: Customers already running IBM i workloads
-  aix_plus_edb:
-    description: AIX+EDB path — IBM i not used; EDB/PostgreSQL holds all data (Oracle replacement story)
+  path_a_ibm_i_plus_postgresql:
+    label: "Path A — IBM i + PostgreSQL (default)"
+    description: IBM i Db2 as ERP source, PostgreSQL 16 as operational DB
+    audience: Customers running IBM i workloads
+  path_b_postgresql_only:
+    label: "Path B — PostgreSQL only (EDB / Oracle replacement story)"
+    description: No IBM i — EDB/PostgreSQL holds all data; positions EDB as Oracle replacement on Power
     audience: Customers running Oracle on AIX, considering modernisation to EDB on IBM Power
 ---
-
-# watsonx.data on IBM Power — Zero-ETL Data Federation Demo
-
-For a one-page getting started guide, see [`GETTING-STARTED.md`](GETTING-STARTED.md).
-
-For full setup instructions, see [`COLLECTION.md`](COLLECTION.md).
-
-For the development journey, decisions, and deployment log, see [`RECIPE-JOURNEY.md`](RECIPE-JOURNEY.md).
-
-## Quick Start
-
-1. **Story phase** — Tell Bob: *"I want to run the watsonx.data Power demo. My customer is [name/industry/audience]. They run [IBM i / Oracle on AIX]."*
-2. **Reserve** environments manually — watsonx.data SaaS + IBM i (Path A only) + RHEL/Power10 VM (~15 min effort + ~30 min wait each)
-3. **Deploy** — Tell Bob your RHEL FQDN, SSH key path, and watsonx.data credentials. Bob loads data, configures federation, and deploys the UI.
-4. **Demo** — Open `http://<fqdn>:3000`. Run the 6-step arc live.
-
-**Total human effort:** ~45 minutes. **Total elapsed:** ~90 minutes (mostly TechZone provisioning waits).
-
-> **⚠️ All TechZone reservations are manual** — IBM i, RHEL/Power10, and watsonx.data SaaS
-> all use v1 TechZone environments. Bob cannot book them automatically. See `COLLECTION.md`
-> for exact URLs and what to note from each reservation.

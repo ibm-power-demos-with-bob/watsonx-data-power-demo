@@ -82,6 +82,12 @@ body {
   animation: slideIn 0.35s ease-out forwards;
 }
 
+// Spin animation for query execution indicators
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 // Source badge colours
 .badge-ibmi   { background: #001d6c; color: #78a9ff; border: 1px solid #0043ce; }
 .badge-edb    { background: #1c0f30; color: var(--demo-purple); border: 1px solid #6929c4; }

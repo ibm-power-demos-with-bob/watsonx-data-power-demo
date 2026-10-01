@@ -48,3 +48,6 @@ npm-debug.log*
 
 # Setup secrets - never commit
 setup/config.env
+
+# Per-reservation credentials - never commit
+setup/reservation.py

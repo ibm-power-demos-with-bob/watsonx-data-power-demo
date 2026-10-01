@@ -212,8 +212,9 @@ sudo -u "${EDB_USER}" "${PGBIN}/psql" -c "
     DO \\$\\$
     BEGIN
       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'edbadmin') THEN
-        CREATE ROLE edbadmin LOGIN PASSWORD 'edbadmin1' SUPERUSER;
+        CREATE ROLE edbadmin LOGIN SUPERUSER;
       END IF;
+      ALTER ROLE edbadmin WITH PASSWORD 'edbadmin';
     END
     \\$\\$;
 "

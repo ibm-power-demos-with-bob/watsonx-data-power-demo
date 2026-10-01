@@ -45,6 +45,9 @@ CREATE VIEW OLIST.V_CUSTOMERS AS
 -- ---------------------------------------------------------------------------
 -- V_PRODUCTS
 -- CHAR(32) → VARCHAR(32):  PRODID
+-- NOTE: SECTOR column is added by the sector-enrichment step (6-pos-to-iceberg.py).
+-- This view is created WITHOUT SECTOR so it always succeeds on a fresh load.
+-- If SECTOR exists, re-run this file after enrichment to add it back.
 -- ---------------------------------------------------------------------------
 CREATE VIEW OLIST.V_PRODUCTS AS
   SELECT
@@ -57,8 +60,7 @@ CREATE VIEW OLIST.V_PRODUCTS AS
     WEIGHTG                        AS "weight g",
     LENGTHCM                       AS "length cm",
     HEIGHTCM                       AS "height cm",
-    WIDTHCM                        AS "width cm",
-    SECTOR                         AS "sector"
+    WIDTHCM                        AS "width cm"
   FROM OLIST.PRODUCTS;
 
 -- ---------------------------------------------------------------------------

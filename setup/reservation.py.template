@@ -1,0 +1,44 @@
+"""
+setup/reservation.py.template
+==============================
+Copy this file to setup/reservation.py and fill in your values.
+reservation.py is gitignored — never commit it with real credentials.
+
+All values change with every TechZone reservation.
+See setup/RUNBOOK.md → Prerequisites for exactly where to find each value.
+"""
+
+# ── IBM i + RHEL reservation ───────────────────────────────────────────────
+# Hostname prefix is the part before .<vlan>.pok-systems.techzone.ibm.com
+# Both VMs share the same prefix, user, key and password.
+RESERVATION_PREFIX = "XXXXXXXX"          # ← from reservation FQDNs, e.g. "3ef70s3k"
+IBMI_HOST = f"pvm02-{RESERVATION_PREFIX}.p1223.pok-systems.techzone.ibm.com"
+RHEL_HOST = f"pvm01-{RESERVATION_PREFIX}.p1223.pok-systems.techzone.ibm.com"
+SSH_USER  = "XXXXXXX"                    # ← TechZone username, e.g. "US2YBRJ"
+SSH_KEY   = r"C:\Users\YOUR_USER\Downloads\pvm-XXXXXXXX-key.pem"  # ← path to downloaded .pem
+IBMI_PASSWORD = "REPLACE_ME"             # ← IBM i OS password from reservation details
+IBMI_RDB      = "REPLACE_ME"            # ← confirm via DSPRDBDIRE on IBM i, e.g. "PVM02X3E"
+
+# ── watsonx.data Dev Image ─────────────────────────────────────────────────
+# SSH and Presto ports change per reservation (Published Services tab).
+WXD_HOST         = "eu-de.services.cloud.techzone.ibm.com"  # region stays eu-de
+WXD_SSH_PORT     = 00000    # ← Published Services → "22: SSH for watsonx userid" port
+WXD_PRESTO_PORT  = 00000    # ← Published Services → "8443: Presto Port" port
+WXD_SSH_USER     = "watsonx"         # fixed
+WXD_SSH_PASS     = "watsonx.data"    # fixed
+WXD_API_USER     = "ibmlhadmin"      # fixed
+WXD_API_PASS     = "password"        # fixed
+
+# ── IBM Cloud Satellite ─────────────────────────────────────────────────────
+# SATELLITE_IAM_APIKEY changes with every Satellite reservation.
+# Get it from: TechZone reservation page → Reservation Details → "IBM Cloud API key" → eye icon
+# SATELLITE_CONNECTOR_ID is stable for the same IBM Cloud account.
+SATELLITE_CONNECTOR_ID = "REPLACE_ME"   # ← IBM Cloud console → Satellite → Connectors → URL
+SATELLITE_IAM_APIKEY   = "REPLACE_ME"   # ← TechZone Satellite reservation → IBM Cloud API key
+SATELLITE_REGION       = "eu-gb"        # fixed
+
+# ── PostgreSQL (set by 8-load-edb-olist.py --install-edb) ──────────────────
+PG_USER     = "edbadmin"
+PG_PASSWORD = "edbadmin"
+PG_PORT     = 5432
+PG_DB       = "olist"

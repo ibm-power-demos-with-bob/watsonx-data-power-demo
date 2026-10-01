@@ -135,63 +135,33 @@ The story phase takes 15–30 minutes and is the single biggest factor in whethe
 
 ## Infrastructure Requirements
 
-**Three reservations are required. All must be made manually** — TechZone MCP cannot reserve
-IBM Power environments.
+**Three reservations from the [Show Business Value of watsonx.data with IBM Power](https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power) collection are required.**
 
-### ⚠️ Critical networking requirement
+All three environments need manual TechZone reservation:
 
-**IBM i and RHEL must be reserved from the same TechZone collection** so they land in the same
-PowerVS workspace and share a private network. Reservations from different collections land on
-isolated network pods with no L3 routing between them — IBM i will be unreachable from RHEL,
-and the federation connectors will fail.
+| Reservation | Resource in Collection | What runs there |
+|-------------|------------------------|-----------------|
+| **1. watsonx.data Developer Base Image** | `IBM watsonx.data Development Lab - 2.2.0 GA` (VMware, `eu-de`) | Standalone watsonx.data instance with Presto engine (`presto-01`). Basic auth (`ibmlhadmin`/`password`). No IAM tokens needed. |
+| **2. Combined IBM i + RHEL Lab** | `IBM i / RHEL lab` (TxC Lab, Poughkeepsie on-prem pod) | RHEL 9.8 (Power10) hosting PostgreSQL 16, Satellite Agent, & Demo UI. IBM i 7.6 TR1 (Power11) hosting Db2 ERP schema. Both share `/28` subnet. |
+| **3. IBM Cloud Satellite** | `IBM Satellite` (`ITZ-V2` account) | Connector (`wxd-power-connector`) bridging Dev Image Presto in `eu-de` to on-prem PostgreSQL (`:33156`) and Db2 for i (`:33180`). |
 
-The validated pattern uses **IBM Cloud PowerVS** for both IBM i and RHEL. PowerVS instances in
-the same workspace share a private network and can also reach IBM Cloud services (watsonx.data
-SaaS, COS) directly — no IBM VPN required for connectivity between services.
-
-**IBM Cloud Satellite Connector** (running its agent as a Docker container on the RHEL VM)
-bridges from IBM Cloud into the PowerVS workspace, allowing watsonx.data SaaS to reach the
-IBM i and PostgreSQL endpoints via Satellite Link endpoints — without opening any inbound
-firewall ports. Use Satellite **Connector** (lightweight Docker agent, minutes to set up), not
-Satellite **Location** (full infrastructure deployment, requires worker nodes, overkill here).
-The Connector must be in the same IBM Cloud account as watsonx.data SaaS.
-
-### For Path A — IBM i + PostgreSQL
-
-| Reservation | Where to reserve | What runs there |
-|-------------|-----------------|----------------|
-| watsonx.data SaaS | https://techzone.ibm.com/collection/watsonx-data | Presto engine, Iceberg catalog, COS storage |
-| IBM i 7.6 PowerVS | [Certified PowerVS Base VMs](https://techzone.ibm.com/resource/69caf21433fe65185ca16a84) → **IBM i 7.6 IBM Cloud PowerVS VSI** | Db2 for IBM i — OLIST schema (ERP source) |
-| RHEL 9 PowerVS | [Certified PowerVS Base VMs](https://techzone.ibm.com/resource/69caf21433fe65185ca16a84) → **Red Hat 9 IBM Cloud PowerVS VSI** | IBM Cloud Satellite Connector agent (Docker) + PostgreSQL 16 + demo UI |
-
-### For Path B — AIX + EDB
-
-| Reservation | Where to reserve | What runs there |
-|-------------|-----------------|----------------|
-| watsonx.data SaaS | Same as Path A | Same as Path A |
-| RHEL 9 PowerVS | Same as Path A | IBM Cloud Satellite Connector agent (Docker) + PostgreSQL/EDB (all data) + demo UI |
-
-> **IBM VPN** is not required for service-to-service connectivity when using PowerVS + Satellite.
-> It is still needed for browser access to the demo UI during the presentation — the PowerVS RHEL
-> VM is not publicly exposed.
+> **IBM VPN** is required for browser access to the demo UI (`http://129.40.125.69:3000`) and the watsonx.data UI.
 
 ### What to note from each reservation
 
-**watsonx.data SaaS:**
-- IBM Cloud API key (from IAM → Service credentials — use Student App ID, not your IBM ID)
-- Instance CRN (from resource details)
-- COS bucket name + endpoint
-- Presto engine ID (from watsonx.data console → Infrastructure, after `4-provision-via-rest-api.py` runs)
+**watsonx.data Developer Base Image:**
+- Presto Port (e.g. `46662`) and UI Port (e.g. `48544`)
+- Hostname (e.g. `eu-de.services.cloud.techzone.ibm.com`)
+- Presto credentials: `ibmlhadmin` / `password`
 
-**IBM i PowerVS reservation:**
-- FQDN / IP address (from reservation details)
-- SSH key (download "User Private SSH Key" from reservation details)
-- IBM i `*SECOFR`-level user credentials
+**IBM i + RHEL Lab:**
+- RHEL IP (`129.40.125.69`) & IBM i IP (`129.40.125.73`)
+- SSH User (`U8GO7IL`) & Password (`0@0PJp+*eB3j)Vq`)
+- Download "User Private SSH Key" (`user_ssh_private_key.pem`)
 
-**RHEL 9 PowerVS reservation:**
-- FQDN (from reservation details)
-- SSH key (download from reservation details)
-- Note: RHEL 9 from this collection — Node.js installed via NodeSource repo; deploy skill handles this
+**IBM Cloud Satellite:**
+- Connector name (`wxd-power-connector`)
+- Link endpoint ports (`:33156` for PostgreSQL, `:33180` for IBM i)
 
 ---
 
@@ -210,47 +180,29 @@ Bob will:
   - Confirm the demo arc and punchline moments for your audience
 ```
 
-### Step 2: Reserve TechZone Environments (15–45 minutes effort + provisioning wait)
+### Step 2: Reserve TechZone Environments (~15–30 min effort)
 
-Reserve **all required environments** (see Infrastructure Requirements above).
+Reserve all 3 environments from the collection: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
 
-**For watsonx.data SaaS:**
-- Go to https://techzone.ibm.com/collection/watsonx-data
-- Select "Demo" purpose and enter your opportunity code (or "Test" — no code needed)
-- Recommended geography: **Europe (London / eu-gb)** — confirmed region for watsonx.data SaaS in TechZone
-
-**For IBM i 7.6 PowerVS (Path A only):**
-- Go to https://techzone.ibm.com/resource/69caf21433fe65185ca16a84
-- Click **IBM i 7.6 IBM Cloud PowerVS VSI** → Reserve
-- Select geography **eu-gb (London)** to match watsonx.data SaaS region
-- Download the private SSH key from reservation details
-
-**For RHEL 9 PowerVS:**
-- Go to https://techzone.ibm.com/resource/69caf21433fe65185ca16a84
-- Click **Red Hat 9 IBM Cloud PowerVS VSI** → Reserve
-- Select geography **eu-gb (London)** — must match IBM i reservation geography so they land in the same PowerVS workspace
-- Download the private SSH key
-
-> ⚠️ **Both PowerVS reservations must be in the same geography (eu-gb London preferred, or whichever is available).** This is what ensures they
-> share the same PowerVS workspace and private network. Different geographies = different workspaces =
-> no L3 connectivity between IBM i and RHEL.
+Wait for all three reservations to reach **Ready** status.
 
 **When all three are in Ready state, tell Bob:**
 
-> *"All three environments are ready. watsonx.data is at [URL], IBM API key [key].
->   IBM i is at [FQDN], key at [path]. RHEL is at [FQDN], key at [path].
+> *"All three environments are ready.
+>   watsonx.data Dev Image host: [host], Presto port: [port].
+>   RHEL IP: [ip], IBM i IP: [ip], SSH key: [path].
 >   Deploy the watsonx.data Power demo."*
 
 ### Step 3: Deploy (Bob-driven, ~30–45 minutes)
 
 Bob will execute the deploy skill (`deploy-watsonx-data-power`), which:
 
-1. **Provisions watsonx.data** — runs `setup/4-provision-via-rest-api.py` to configure Presto engine, Iceberg catalog, and COS connector
-2. **Loads IBM i data** (Path A) — runs `setup/5-ibmi-olist-ddl.sql` + `setup/6-load-ibmi-olist.py` + `setup/9-ibmi-add-sector.sql` via SSH to load 99k+ rows
-3. **Installs and loads EDB** — runs `setup/8-load-edb-olist.py --install-edb` on the RHEL VM, then `setup/7-edb-olist-ddl.sql` + data load
-4. **Configures federation connectors** — follows `setup/2-configure-federation.md` to wire all three sources in watsonx.data
-5. **Deploys the demo UI** — rsync, `npm install`, `npm run build`, starts UI on port 3000 via `restart.sh`
-6. **Verifies** — runs a smoke test federated query, confirms UI is reachable, confirms live feed fetcher is running
+1. **Connects via SSH** to RHEL and IBM i
+2. **Starts the IBM Cloud Satellite Agent container** on RHEL (podman)
+3. **Applies compatibility views & verifies data** on Db2 for i and PostgreSQL
+4. **Registers Presto federation catalogs** (`pg_olist` and `ibmi_olist`) and associates them with `presto-01`
+5. **Deploys and starts the Next.js demo UI** on RHEL (`PORT=3000 npm start`)
+6. **Verifies live federation execution** via smoke test
 
 ### Step 4: Demo Ready
 
