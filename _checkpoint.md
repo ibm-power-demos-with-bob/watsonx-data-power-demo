@@ -1,7 +1,7 @@
 # 🔖 Checkpoint — watsonx.data on IBM Power Demo
 
 ## Current Status
-**Session 19/20 — FULL STACK DEPLOYED & COMPLEMENTARY BOND STRATEGIC INTELLIGENCE INVESTIGATION INTEGRATED.**
+**Session 20 — FULL STACK DEPLOYED, BOND STRATEGIC INTELLIGENCE INTEGRATED, BOND DATA CORRECTED (see Session 20 notes below).**
 
 - Demo UI: `http://pvm01-edaaiu5k.p1356.pok-systems.techzone.ibm.com:3000` (or SSH tunnel `-L 3000:localhost:3000`)
 - **Demo 1 (Operational Agility - Satnav)**: Both scenarios (`supplier-cyber-incident` ~6s, `eu-wildfire` ~5s) live and verified.
@@ -14,6 +14,20 @@
 - `demo-ui/` source had been deleted from the working tree (still in git) → restored with `git checkout HEAD -- demo-ui`. Check `git status` before deploying.
 - `_smoke_test_ui.py` now reads `reservation.py` (was hard-coded to old reservation). Its `/api/wxd-query-internal` check always shows "Internal Server Error" — that file is a helper module with no route; ignore it. Use `setup/_check_ui_queries.py` (inject-signal + POST /api/alerts) for a real end-to-end test.
 - `_start_satellite_agent.py` prints a ✅ that crashes on Windows cp1252 console (harmless; set `PYTHONIOENCODING=utf-8`).
+
+---
+
+**Session 20 — Bond data fix (Act 6 oddities).**
+
+- **Problem:** Grace Jones showed 0 lifetime credits / 0 active years, Denise Richards 1 credit. Cause: 5 rows in `demo-ui/src/data/bond/bond_actress_career_analysis.json` had an IMDb `nconst` pointing at a *different person with the same name* (also Jane Seymour, Barbara Bach, Daniela Bianchi).
+- **Fix:** corrected `nconst` and recomputed career fields from the public IMDb datasets (method validated against Maud Adams / Britt Ekland: exact match on credits, years, ratings). All five are now "Thriving Long-Term Career" (Jones 100 credits/41 yrs, Richards 549/28, Seymour 681/53, Bach 85/47, Bianchi 25/63). The other 38 rows were checked against IMDb and are correct.
+- **Redeployed:** reloaded Postgres with `python setup/9-load-bond-data-pg.py` (43 / 7 / 20 rows); `setup/_verify_live_bond_acts.py` shows all 6 acts OK. No UI rebuild needed (data is read from Postgres via Presto).
+- **Helper scripts (re-runnable):** `setup/_imdb_fix_fetch.py` (streams IMDb datasets, ~15 min, writes `%TEMP%/imdb/extract.json`) and `setup/_fix_bond_nconsts.py` (applies the fix to the JSON).
+- **Demo talking points / known caveats (demo-grade data):**
+  - Credits are all IMDb credit types (TV episodes, talk shows, archive footage), so counts like 549/681 mean "credits", not films.
+  - `*_avg_score*` columns for the 5 fixed rows are an approximation (~5% off the original formula); not shown on the Act 6 screen.
+  - "Decade Avg Votes" (Act 3) = industry-wide mean IMDb votes per rated movie for the film's decade, from `industry_decade_benchmarks` (Iceberg side); same value repeats for every film in a decade. It is shown as context (Clock 3), not applied as an adjustment. Mean peaks in the 2000s then falls in the 2010s/2020s (likely more low-vote releases, newer titles, streaming effects — plausible, not proven from this data).
+  - Hardcoded headline text in `demo-ui/src/pages/api/bond-query.ts` doesn't match table averages: Act 2 "32.4 yrs / 49.8 credits" vs data 34.9 / 170.9; Act 3 "avg age 28.4" vs data 30.5. Optional follow-up: compute these from the data.
 
 ---
 
