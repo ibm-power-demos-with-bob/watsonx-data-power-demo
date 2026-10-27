@@ -1,8 +1,30 @@
 # 🔖 Checkpoint — watsonx.data on IBM Power Demo
 
 ## Current Status
-**Session 18 — Recipe quality fixes applied. All session-17 TechZone reservations have expired.**
-New reservations needed. All recipe bugs from Barry/Andrew testing are fixed.
+**Session 19/20 — FULL STACK DEPLOYED & COMPLEMENTARY BOND STRATEGIC INTELLIGENCE INVESTIGATION INTEGRATED.**
+
+- Demo UI: `http://pvm01-edaaiu5k.p1356.pok-systems.techzone.ibm.com:3000` (or SSH tunnel `-L 3000:localhost:3000`)
+- **Demo 1 (Operational Agility - Satnav)**: Both scenarios (`supplier-cyber-incident` ~6s, `eu-wildfire` ~5s) live and verified.
+- **Demo 2 (Strategic Intelligence - Smartphone)**: Interactive 6-Act Bond Investigation (`/bond-investigation`) deployed on remote RHEL UI with live query execution, 3-clock confounder breakdown, and commercial enterprise translation bridge.
+- Verified: all endpoints (`/`, `/live`, `/sources`, `/bond-investigation`, `/api/bond-query`) return HTTP 200.
+- `SATELLITE_CONNECTOR_ID` now filled in `reservation.py`; agent shows `WSR04 Connected`.
+
+**Session 19 deployment gotchas (found this session):**
+- `data/olist/*.csv` are gitignored and were **0-byte placeholders** (sellers/products/translation) → `8-load-edb-olist.py` fails with "No columns to parse". Fix: re-download from Kaggle (`kaggle.api.dataset_download_files('olistbr/brazilian-ecommerce', ...)`; `~/.kaggle/kaggle.json` is present) and copy into `data/olist/`.
+- `demo-ui/` source had been deleted from the working tree (still in git) → restored with `git checkout HEAD -- demo-ui`. Check `git status` before deploying.
+- `_smoke_test_ui.py` now reads `reservation.py` (was hard-coded to old reservation). Its `/api/wxd-query-internal` check always shows "Internal Server Error" — that file is a helper module with no route; ignore it. Use `setup/_check_ui_queries.py` (inject-signal + POST /api/alerts) for a real end-to-end test.
+- `_start_satellite_agent.py` prints a ✅ that crashes on Windows cp1252 console (harmless; set `PYTHONIOENCODING=utf-8`).
+
+---
+
+**Earlier in session 19 — IBM i Phase 1 COMPLETE.**
+
+IBM i OLIST loaded via `setup/_diagnose_ibmi.py` (CUSTOMERS 99,441 / ORDERS 99,441 / ORDERITEMS 112,650 / PRODUCTS 32,951) and compat views applied via `_apply_ibmi_compat_views.py` (all 4 views exist). Verify with `python setup/_check_ibmi_load.py`.
+
+Root causes of the earlier load failures (all fixed in `_diagnose_ibmi.py`):
+1. `CREATE SCHEMA` in DDL conflicts with `CRTLIB` — RUNSQLSTM aborts silently. Fix: strip it before upload.
+2. Failed CPYFRMIMPF attempts corrupted the file member. Fix: DLTLIB/CRTLIB reset.
+3. Note: `CHKOBJ OBJ(OLIST/V_CUSTOMERS)` reports false MISSING — long SQL names get system names `V_CUS00001`/`V_ORD00001`. Check via `QSYS2.SYSTABLES` instead (`_check_ibmi_load.py`). `_check_ibmi_views.py` has this false-negative bug.
 
 All three TechZone environments are Ready and fully operational. Federation is live:
 - IBM i Db2 (`ibmi_olist`) — 99,441 customers, 112,650 order items queryable via Presto
@@ -15,17 +37,45 @@ All three TechZone environments are Ready and fully operational. Federation is l
 
 ---
 
-## Active Reservations
+## Active Reservations (Session 19 — current)
 
-> **Session 17 reservations have expired.** New reservations needed.
-> Collection: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
-> Platform IDs: `685705e13f60074883ce964f` (Dev Image), `6aa0476b0e167e33005b104d` (IBM i + RHEL), `6a8eefb1116ff35215509bbd` (Satellite)
+All three are **Ready**. All expire **31 Oct 2026** (~12:05–12:10 UTC).
 
-| Environment | Status | Key details |
-|---|---|---|
-| **IBM i + RHEL (On-prem)** | ⏳ Awaiting new reservation | See RUNBOOK.md Prerequisites |
-| **IBM Cloud Satellite** | ⏳ Awaiting new reservation | Accept ITZ-V2 invite + Step 8b ACL |
-| **watsonx.data Dev Image** | ⏳ Awaiting new reservation | Fixed: `eu-de.services.cloud.techzone.ibm.com` |
+| Environment | Request ID | Status | Expires |
+|---|---|---|---|
+| **IBM i + RHEL** | `6ae08c9014551a1d930e9d4d` | ✅ Ready | 31 Oct 12:05 UTC |
+| **watsonx.data Dev Image** | `6ae08cfd2416223c66b20f81` | ✅ Ready | 31 Oct 12:10 UTC |
+| **IBM Satellite** | `6ae08d3493a341e8c94fe628` | ✅ Ready | 31 Oct 11:45 UTC |
+
+### IBM i + RHEL credentials
+| Field | Value |
+|---|---|
+| `RESERVATION_PREFIX` | `edaaiu5k` |
+| `RESERVATION_VLAN` | `p1356` |
+| `RHEL_HOST` | `pvm01-edaaiu5k.p1356.pok-systems.techzone.ibm.com` (IP: `129.40.97.178`) |
+| `IBMI_HOST` | `pvm02-edaaiu5k.p1356.pok-systems.techzone.ibm.com` (IP: `129.40.97.182`) |
+| `SSH_USER` | `UH6OWE8` |
+| `SSH_KEY` | `C:\Users\029878866\Downloads\pvm-edaaiu5k-key.pem` ✅ saved |
+| `IBMI_PASSWORD` | `a.Eh3A*03XuYEoq` |
+| `IBMI_RDB` | `PVM02XED` (confirmed via DSPRDBDIRE) |
+
+### watsonx.data Dev Image credentials
+| Field | Value |
+|---|---|
+| `WXD_HOST` | `eu-de.services.cloud.techzone.ibm.com` |
+| `WXD_SSH_PORT` | `39957` |
+| `WXD_PRESTO_PORT` | `27799` |
+| `WXD_SSH_USER` | `watsonx` / `WXD_SSH_PASS` = `watsonx.data` |
+| `WXD_API_USER` | `ibmlhadmin` / `WXD_API_PASS` = `password` |
+
+### IBM Satellite credentials
+| Field | Value |
+|---|---|
+| `SATELLITE_IAM_APIKEY` | `Pauy15VZw_g3_vv5YHxFpIVI2QIgY5vXZP2sRtB2YDn3` |
+| `SATELLITE_CONNECTOR_ID` | **Still needed** — check IBM Cloud console → Satellite → Connectors → `wxd-power-connector` |
+| `SATELLITE_REGION` | `eu-gb` |
+
+> `setup/reservation.py` is already populated with all of the above. `SATELLITE_CONNECTOR_ID` is the only remaining blank.
 
 ---
 
@@ -39,6 +89,21 @@ All three TechZone environments are Ready and fully operational. Federation is l
 - **Dev Image JWT auth**: `POST https://localhost:9443/lakehouse/api/v2/auth/authenticate` with body `{"username":"ibmlhadmin","password":"password","instance_id":"0000-0000-0000-0000","instance_name":"lh-default"}` → returns `accessToken` ✅
 - **Dev Image registration payload**: credentials go inside `database_details` (not top-level) in v2.2
 - **Dev Image always does a live connection test** before registering a catalog — no skip option exists. Registration will fail until Satellite agent is running on RHEL.
+
+---
+
+## What Was Done This Session (Session 19 — Deployment)
+
+- DRDA password set: `CPC2205: User profile UH6OWE8 changed.` ✅
+- `IBMI_RDB` confirmed: `PVM02XED` ✅
+- `reservation.py` fully populated (all except `SATELLITE_CONNECTOR_ID`) ✅
+- SSH key saved to `C:\Users\029878866\Downloads\pvm-edaaiu5k-key.pem` ✅
+- Recipe fixes committed: `d7f3a96` (requirements.txt, .gitattributes, parse_ts fix, VLAN fix, Step 8b)
+- **IBM i data load NOT YET COMPLETE** — blocked by two bugs found and fixed during this session:
+  - DDL `CREATE SCHEMA` conflict: fixed in `_diagnose_ibmi.py` (strips the line before RUNSQLSTM)
+  - `DLTLIB OLIST` succeeded (`CPC2194`) and `CRTLIB OLIST` succeeded (`CPC2102`) — library is clean
+  - Final script `_diagnose_ibmi.py` runs DDL + full data load in one pass — was mid-run when context limit hit
+- `setup/_diagnose_ibmi.py` is the **complete Phase 1 reset + load script** — run it first in the new session
 
 ---
 

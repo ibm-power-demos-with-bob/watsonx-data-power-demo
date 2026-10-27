@@ -135,6 +135,14 @@ python3 setup/_apply_pg_compat_views.py
 
 Expected: `CREATE VIEW` ×5 (`v_tier2_suppliers`, `v_suppliers`, `v_warehouses`, `v_purchase_orders`, `v_compromised_exposure`).
 
+### Step 6b — Load Strategic Intelligence / Bond Data into PostgreSQL
+
+```bash
+python3 setup/9-load-bond-data-pg.py
+```
+
+Expected: Creates and populates `bond_career_analysis` (43 rows), `industry_decade_benchmarks` (7 rows), and `bond_semantic_reviews` (20 rows) in the `olist` database. These are immediately queryable via Presto under the `pg_olist` catalog.
+
 > `v_compromised_exposure` pre-aggregates the 3-way supplier exposure join inside PostgreSQL.
 > This is what keeps the cyber incident query at ~5s rather than ~35s over the Satellite tunnel.
 > The 5s latency is intentional — the spinner makes the federation visible to the customer.

@@ -204,6 +204,21 @@ export default function SourcesPage() {
           >
             ← Back to Static Report
           </button>
+          <button
+            onClick={() => router.push('/bond-investigation')}
+            style={{
+              background: 'transparent',
+              border: '1px solid #0f62fe',
+              color: '#4589ff',
+              borderRadius: 2,
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            🎬 Bond Investigation →
+          </button>
         </header>
 
         {/* Main Content */}

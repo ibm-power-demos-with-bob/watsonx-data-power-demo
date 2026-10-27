@@ -174,6 +174,10 @@ export default function LivePage() {
             style={{ background: 'transparent', border: '1px solid var(--demo-border)', color: 'var(--demo-text-muted)', borderRadius: 2, padding: '4px 12px', fontSize: 11, cursor: 'pointer' }}>
             ← Architecture
           </button>
+          <button onClick={() => router.push('/bond-investigation')}
+            style={{ background: 'var(--demo-surface-2)', border: '1px solid var(--demo-blue)', color: 'var(--demo-blue)', borderRadius: 2, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+            🎬 Bond Investigation →
+          </button>
           {/* Audience indicator badge */}
           {(isSecurity || isTechnical || isOperations || isExecutive) && (
             <span style={{

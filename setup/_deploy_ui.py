@@ -50,6 +50,14 @@ def run(cmd, timeout=120, label=""):
     if stderr and rc != 0: print(f"  {tag}ERR: {stderr[:400]}".encode("ascii","replace").decode("ascii"))
     return rc, stdout
 
+def run_bg(cmd, label=""):
+    transport = c.get_transport()
+    channel = transport.open_session()
+    channel.exec_command(cmd)
+    print(f"  [{label}] Started in background")
+    time.sleep(1)
+    channel.close()
+
 # ── 1. Check / install Node.js ──────────────────────────────────────────────
 # NodeSource does NOT support ppc64le — use RHEL AppStream repo (Node 16).
 # Node 16 works fine with Next.js 14 on ppc64le Power10/11.
@@ -142,11 +150,11 @@ print("\n=== Step 6: Start UI on port 3000 ===")
 run("fuser -k 3000/tcp 2>/dev/null; sleep 2; echo ok", label="kill-old")
 start_cmd = (
     f"cd {REMOTE} && "
-    f"setsid sh -c 'PORT=3000 npm start >> /tmp/demo-ui.log 2>&1' </dev/null &"
+    f"nohup npm start </dev/null >/tmp/demo-ui.log 2>&1 &"
 )
-run(start_cmd, label="start")
-print("  Waiting 15s for server to bind...")
-time.sleep(15)
+run_bg(start_cmd, label="start")
+print("  Waiting 8s for server to bind...")
+time.sleep(8)
 
 # ── 7. Smoke test ─────────────────────────────────────────────────────────────
 print("\n=== Step 7: Smoke test ===")

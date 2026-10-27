@@ -183,6 +183,21 @@ export default function StaticMapPage() {
             {showNotes ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             <span>Speaker Notes</span>
           </button>
+          <button
+            onClick={() => router.push('/bond-investigation')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #0f62fe',
+              color: '#0f62fe',
+              borderRadius: 2,
+              padding: '4px 12px',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            🎬 Bond Investigation →
+          </button>
         </div>
 
         <div style={{ padding: '24px 32px', maxWidth: 1280, margin: '0 auto' }}>

@@ -1,0 +1,65 @@
+[
+  {
+    "decade": "1960s",
+    "total_movies_released": 31901,
+    "rated_movies_count": 17968,
+    "mean_imdb_rating": 6.03,
+    "mean_votes_per_movie": 1437.2,
+    "median_votes_per_movie": 58.0,
+    "p90_votes_per_movie": 1215.0
+  },
+  {
+    "decade": "1970s",
+    "total_movies_released": 40733,
+    "rated_movies_count": 23927,
+    "mean_imdb_rating": 5.9,
+    "mean_votes_per_movie": 1815.7,
+    "median_votes_per_movie": 55.0,
+    "p90_votes_per_movie": 1153.0
+  },
+  {
+    "decade": "1980s",
+    "total_movies_released": 44566,
+    "rated_movies_count": 26638,
+    "mean_imdb_rating": 5.98,
+    "mean_votes_per_movie": 3046.1,
+    "median_votes_per_movie": 59.0,
+    "p90_votes_per_movie": 1587.3
+  },
+  {
+    "decade": "1990s",
+    "total_movies_released": 46352,
+    "rated_movies_count": 27725,
+    "mean_imdb_rating": 6.03,
+    "mean_votes_per_movie": 6288.4,
+    "median_votes_per_movie": 71.0,
+    "p90_votes_per_movie": 2993.6
+  },
+  {
+    "decade": "2000s",
+    "total_movies_released": 79261,
+    "rated_movies_count": 48510,
+    "mean_imdb_rating": 6.2,
+    "mean_votes_per_movie": 6985.1,
+    "median_votes_per_movie": 84.0,
+    "p90_votes_per_movie": 3130.3
+  },
+  {
+    "decade": "2010s",
+    "total_movies_released": 170032,
+    "rated_movies_count": 95725,
+    "mean_imdb_rating": 6.22,
+    "mean_votes_per_movie": 4500.3,
+    "median_votes_per_movie": 69.0,
+    "p90_votes_per_movie": 2090.6
+  },
+  {
+    "decade": "2020s",
+    "total_movies_released": 139590,
+    "rated_movies_count": 71628,
+    "mean_imdb_rating": 6.27,
+    "mean_votes_per_movie": 2374.3,
+    "median_votes_per_movie": 63.0,
+    "p90_votes_per_movie": 1741.0
+  }
+]
