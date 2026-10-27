@@ -1,12 +1,43 @@
 #!/usr/bin/env python3
-"""Log in to ICR and start the IBM Cloud Satellite connector agent via podman."""
-import paramiko, time, sys, os
+"""Log in to ICR and start the IBM Cloud Satellite connector agent via podman.
+
+Before starting the agent, prints the IAM Service ID associated with the
+SATELLITE_IAM_APIKEY. Every new user must authorise this Service ID on the
+wxd-power-connector ACL (Step 8b in RUNBOOK.md) before the agent can connect.
+"""
+import base64, json, paramiko, requests, time, sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from reservation import (RHEL_HOST as HOST, SSH_USER as USER, SSH_KEY as KEY,
                          SATELLITE_CONNECTOR_ID as CONNECTOR_ID,
                          SATELLITE_IAM_APIKEY as IAM_APIKEY,
                          SATELLITE_REGION as REGION)
 IMAGE = "icr.io/ibm/satellite-connector/satellite-connector-agent:latest"
+
+# ── Resolve and print the Service ID from the IAM API key ──────────────────
+# This helps the user authorise their agent on the connector ACL (Step 8b).
+print("--- Resolving IAM Service ID for this API key ---")
+try:
+    token_resp = requests.post(
+        "https://iam.cloud.ibm.com/identity/token",
+        data={"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": IAM_APIKEY},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=30,
+    )
+    token_resp.raise_for_status()
+    access_token = token_resp.json()["access_token"]
+    # JWT payload is the second segment; add padding so base64 doesn't fail
+    payload_b64 = access_token.split(".")[1] + "=="
+    payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+    service_id = payload.get("iam_id", "unknown")
+    print(f"\n  ✅ Your IAM Service ID is: {service_id}")
+    print(
+        "\n  ⚠️  If this is your first time running this recipe, you MUST authorise\n"
+        "     this Service ID on the wxd-power-connector before the agent will connect.\n"
+        "     See RUNBOOK.md Step 8b for instructions.\n"
+    )
+except Exception as exc:
+    print(f"  WARNING: Could not resolve Service ID — {exc}")
+    print("  The agent will still start; check Step 8b in RUNBOOK.md if WSR04 doesn't appear.\n")
 
 try:
     key = paramiko.Ed25519Key.from_private_key_file(KEY)

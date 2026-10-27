@@ -1,7 +1,8 @@
 # 🔖 Checkpoint — watsonx.data on IBM Power Demo
 
 ## Current Status
-**Session 17 — COMPLETE. Full demo stack is running end-to-end.**
+**Session 18 — Recipe quality fixes applied. All session-17 TechZone reservations have expired.**
+New reservations needed. All recipe bugs from Barry/Andrew testing are fixed.
 
 All three TechZone environments are Ready and fully operational. Federation is live:
 - IBM i Db2 (`ibmi_olist`) — 99,441 customers, 112,650 order items queryable via Presto
@@ -14,13 +15,17 @@ All three TechZone environments are Ready and fully operational. Federation is l
 
 ---
 
-## Active Reservations (Session 16)
+## Active Reservations
+
+> **Session 17 reservations have expired.** New reservations needed.
+> Collection: https://techzone.ibm.com/collection/show-business-value-of-watsonxdata-with-ibm-power
+> Platform IDs: `685705e13f60074883ce964f` (Dev Image), `6aa0476b0e167e33005b104d` (IBM i + RHEL), `6a8eefb1116ff35215509bbd` (Satellite)
 
 | Environment | Status | Key details |
 |---|---|---|
-| **IBM i + RHEL (On-prem)** | ✅ Ready | `UHJ907M` / `v07zF-4WDyP_a4x` / `pvm-4r13fr3k-key.pem` |
-| **IBM Cloud Satellite** | ✅ Ready | ID `6abe30c2db5476036233b2a2` / API key `MH_j3NAOnqXLvgu1Z34KPa38MW6h_KtVyzr_BB7gVHyE` |
-| **watsonx.data Dev Image** | ✅ Ready | SSH port `44574` / Presto port `48872` / `eu-de.services.cloud.techzone.ibm.com` |
+| **IBM i + RHEL (On-prem)** | ⏳ Awaiting new reservation | See RUNBOOK.md Prerequisites |
+| **IBM Cloud Satellite** | ⏳ Awaiting new reservation | Accept ITZ-V2 invite + Step 8b ACL |
+| **watsonx.data Dev Image** | ⏳ Awaiting new reservation | Fixed: `eu-de.services.cloud.techzone.ibm.com` |
 
 ---
 
@@ -34,6 +39,17 @@ All three TechZone environments are Ready and fully operational. Federation is l
 - **Dev Image JWT auth**: `POST https://localhost:9443/lakehouse/api/v2/auth/authenticate` with body `{"username":"ibmlhadmin","password":"password","instance_id":"0000-0000-0000-0000","instance_name":"lh-default"}` → returns `accessToken` ✅
 - **Dev Image registration payload**: credentials go inside `database_details` (not top-level) in v2.2
 - **Dev Image always does a live connection test** before registering a catalog — no skip option exists. Registration will fail until Satellite agent is running on RHEL.
+
+---
+
+## What Was Done This Session (Session 18 — Recipe Fixes)
+
+- **Fix: Satellite ACL gap** — Step 8b added to RUNBOOK.md: new users must authorise their IAM Service ID on `wxd-power-connector` before starting the agent. `_start_satellite_agent.py` now resolves and prints the Service ID automatically.
+- **Fix: Satellite API outage guidance** — Added guidance to Step 8 for HTTP 503 / LG0009 errors (IBM Cloud Satellite Link API outage not reflected on status page).
+- **Fix: Timestamp format bug** — `parse_ts()` in `6-load-ibmi-olist.py` now outputs `YYYY-MM-DD-HH.MM.SS` (IBM i CPYFRMIMPF format) not `YYYY-MM-DD HH:MM:SS` (SQL format). This fixes CPF2817 field errors on ORDERS and ORDERITEMS.
+- **Fix: Hard-coded VLAN** — `reservation.py.template` previously hard-coded `.p1223.` in the FQDN. Replaced with `RESERVATION_VLAN` variable (separate from `RESERVATION_PREFIX`). RUNBOOK prerequisites table updated. This was the issue Andrew observed with the `p1226` reference.
+- **Fix: Missing requirements.txt** — Added `setup/requirements.txt` listing `paramiko`, `pandas`, `psycopg2-binary`, `kaggle`, `requests`, `ibm-cloud-sdk-core`.
+- **Fix: CRLF line endings** — Added `.gitattributes` enforcing `eol=lf` for `*.del`, `*.sql`, `*.sh`, and `*.py` files. The existing `.del` files in `data/olist_transformed/` should be recommitted after this to strip the Windows CRLF endings from git history.
 
 ---
 

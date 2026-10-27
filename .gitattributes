@@ -1,0 +1,28 @@
+# Enforce Unix line endings for files that are uploaded to IBM i via CPYFRMIMPF.
+# IBM i CPYFRMIMPF with RCDDLM(*LF) fails if the file has Windows CRLF endings
+# because the trailing \r is treated as part of the last field value.
+*.del text eol=lf
+
+# SQL files — also keep LF for IBM i RUNSQLSTM compatibility
+*.sql text eol=lf
+
+# Shell scripts — must be LF for PASE /bin/sh
+*.sh text eol=lf
+
+# Python / everything else — use standard Git normalisation
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.yaml text eol=lf
+*.env text eol=lf
+*.template text eol=lf
+
+# Binary files — never touch
+*.pem binary
+*.mp4 binary
+*.png binary
+*.jpg binary
+*.ico binary

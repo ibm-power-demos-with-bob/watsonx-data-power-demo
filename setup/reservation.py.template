@@ -9,11 +9,20 @@ See setup/RUNBOOK.md → Prerequisites for exactly where to find each value.
 """
 
 # ── IBM i + RHEL reservation ───────────────────────────────────────────────
-# Hostname prefix is the part before .<vlan>.pok-systems.techzone.ibm.com
-# Both VMs share the same prefix, user, key and password.
-RESERVATION_PREFIX = "XXXXXXXX"          # ← from reservation FQDNs, e.g. "3ef70s3k"
-IBMI_HOST = f"pvm02-{RESERVATION_PREFIX}.p1223.pok-systems.techzone.ibm.com"
-RHEL_HOST = f"pvm01-{RESERVATION_PREFIX}.p1223.pok-systems.techzone.ibm.com"
+# The FQDN format is:  pvm0N-<PREFIX>.<VLAN>.pok-systems.techzone.ibm.com
+#
+# RESERVATION_PREFIX — the random suffix in the hostname, e.g. "3ef70s3k"
+#   Copy it from either FQDN on the reservation details page.
+#
+# RESERVATION_VLAN   — the pod/vlan segment, e.g. "p1222", "p1223", "p604"
+#   This changes every reservation and is NOT always p1223.
+#   Copy it from the hostname: pvm01-abc123.>>>p1222<<<.pok-systems.techzone.ibm.com
+#
+# Both VMs share the same PREFIX, VLAN, user, key and password.
+RESERVATION_PREFIX = "XXXXXXXX"          # ← random suffix from reservation FQDNs, e.g. "3ef70s3k"
+RESERVATION_VLAN   = "pXXXX"            # ← pod/vlan from reservation FQDNs, e.g. "p1222" or "p604"
+IBMI_HOST = f"pvm02-{RESERVATION_PREFIX}.{RESERVATION_VLAN}.pok-systems.techzone.ibm.com"
+RHEL_HOST = f"pvm01-{RESERVATION_PREFIX}.{RESERVATION_VLAN}.pok-systems.techzone.ibm.com"
 SSH_USER  = "XXXXXXX"                    # ← TechZone username, e.g. "US2YBRJ"
 SSH_KEY   = r"C:\Users\YOUR_USER\Downloads\pvm-XXXXXXXX-key.pem"  # ← path to downloaded .pem
 IBMI_PASSWORD = "REPLACE_ME"             # ← IBM i OS password from reservation details

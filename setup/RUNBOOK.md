@@ -19,18 +19,20 @@ Three TechZone reservations must all be **Ready** before starting:
 
 | Value | Where to find it | Changes each reservation? |
 |---|---|---|
-| `IBMI_HOST` | IBM i FQDN from IBM i + RHEL reservation details | ✅ Yes |
-| `RHEL_HOST` | RHEL FQDN from IBM i + RHEL reservation details | ✅ Yes |
+| `RESERVATION_PREFIX` | Random suffix in the IBM i + RHEL FQDNs — e.g. `pvm01-`**`3ef70s3k`**`.p1222.pok-systems...` | ✅ Yes |
+| `RESERVATION_VLAN` | Pod/VLAN segment in the FQDNs — e.g. `pvm01-abc.`**`p1222`**`.pok-systems...` — **not always p1223** | ✅ Yes |
 | `SSH_USER` | TechZone username from IBM i + RHEL reservation details | ✅ Yes |
 | `SSH_KEY` | Path to downloaded `.pem` key from IBM i + RHEL reservation | ✅ Yes |
 | `IBMI_PASSWORD` | IBM i OS password from IBM i + RHEL reservation details | ✅ Yes |
-| `IBMI_RDB` | Run `DSPRDBDIRE` on IBM i after first SSH — e.g. `PVM02X3E` (not always the full prefix) | ✅ Yes |
+| `IBMI_RDB` | Run `DSPRDBDIRE` on IBM i after first SSH — e.g. `PVM02X3E` | ✅ Yes |
 | `WXD_SSH_PORT` | Dev Image reservation → Published Services → `22: SSH` port | ✅ Yes |
 | `WXD_PRESTO_PORT` | Dev Image reservation → Published Services → `8443: Presto Port` | ✅ Yes |
 | `SATELLITE_IAM_APIKEY` | Satellite reservation → Reservation Details → "IBM Cloud API key" → eye icon | ✅ Yes |
 | `SATELLITE_CONNECTOR_ID` | IBM Cloud console → Satellite → Connectors → `wxd-power-connector` URL | ✅ Stable (same account) |
 
 > The VM IPs (used by Satellite endpoints) are **resolved automatically** from the FQDNs by `2-configure-satellite.py` — you do not need to look them up or hardcode them.
+
+> **`IBMI_HOST` and `RHEL_HOST` are constructed automatically** from `RESERVATION_PREFIX` and `RESERVATION_VLAN` in `reservation.py`. Do not hardcode full FQDNs — just set the two components.
 
 ---
 
@@ -155,6 +157,14 @@ python3 setup/2-configure-satellite.py
 
 Updates Satellite endpoint targets if the VM IPs have changed. Expected: `[OK] ibmi-db2` and `[OK] pg-olist`.
 
+> **If this script returns HTTP 503** (`LG0009 — Service unavailable when connecting to the backend service`),
+> the IBM Cloud Satellite Link management API is experiencing an outage. The IBM Cloud status page
+> **does not reflect Satellite Link API health** — it may show green when the API is down.
+> In this case, update the endpoint destinations manually via the IBM Cloud console:
+> Satellite → Connectors → `wxd-power-connector` → Endpoints → Edit each endpoint's Destination.
+> The agent will retry automatically every 2 minutes — proceed to Steps 8a and 8b, then run Step 9
+> once the IBM Cloud Link API recovers (monitor with `setup/_check_satellite_status.py`).
+
 ### Step 8a — Accept IBM Cloud account invitation (REQUIRED — first-time per user)
 
 > **Every user must do this once** before the Satellite connector agent can pull from ICR.
@@ -169,7 +179,35 @@ Updates Satellite endpoint targets if the VM IPs have changed. Expected: `[OK] i
 5. Log in with your IBMid if prompted — you should land on the IBM Cloud console in the `ITZ-V2` account
 6. Confirm you can see the Satellite locations page — this means the invitation is accepted
 
-Only then proceed to Step 9.
+Only then proceed to Step 8b.
+
+### Step 8b — Authorise your Service ID on the Satellite connector (REQUIRED — first-time per new user)
+
+> **This step is mandatory for every person who runs this recipe for the first time.**
+> The `wxd-power-connector` in the ITZ-V2 account was created by a previous user. Its Access Control
+> List only grants access to agents that were registered by that original owner. Every new user's
+> agent authenticates with a different IAM Service ID and will be silently rejected unless explicitly
+> authorised — the agent will start and connect to IBM Cloud, but `WSR04 Connected` will never appear.
+
+**How to find your Service ID:**
+
+Run `setup/_start_satellite_agent.py` — it now resolves and prints your Service ID before starting
+the agent. Look for the line:
+
+```
+  ✅ Your IAM Service ID is: iam-ServiceId-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+**How to authorise it (one-time, persists for this IBM Cloud account):**
+
+1. Log in to [IBM Cloud](https://cloud.ibm.com) and switch to the **ITZ-V2** account (`ead8711ba2cc4d08a16fd37427f4f01a`)
+2. Navigate to **Satellite → Connectors → wxd-power-connector → Access** tab
+3. Click **Authorize agents**
+4. Paste your `iam-ServiceId-...` value into the Service ID field
+5. Set role to **Manager**
+6. Click **Save**
+
+Only then run Step 9.
 
 ### Step 9 — Start Satellite connector agent
 

@@ -89,15 +89,26 @@ def safe_num(val):
 
 
 def parse_ts(val):
-    """Normalise Olist timestamps to YYYY-MM-DD HH:MM:SS for CPYFRMIMPF."""
+    """Normalise Olist timestamps to IBM i CPYFRMIMPF format: YYYY-MM-DD-HH.MM.SS.
+
+    IBM i CPYFRMIMPF with DATFMT(*ISO) / TIMFMT(*ISO) expects the timestamp separator
+    between date and time to be a hyphen, and time components to be separated by dots.
+    Olist CSVs use the SQL convention "YYYY-MM-DD HH:MM:SS" (space + colons).
+    Passing that format to CPYFRMIMPF causes CPF2817 / field-count errors because the
+    trailing \\r (CRLF bug) was masking the issue — once CRLF is fixed the mismatch is
+    exposed.  Convert here so the .del files are always in the correct format.
+    """
     if pd.isna(val):
         return ""
     s = str(val).strip()
     if not s:
         return ""
-    # Olist format is already "2017-10-02 10:56:33" — pass through
-    # Strip any trailing fractional seconds just in case
-    return s[:19]
+    # Truncate any fractional seconds, then reformat
+    s = s[:19]   # "YYYY-MM-DD HH:MM:SS"
+    if len(s) == 19 and s[10] == " ":
+        # "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DD-HH.MM.SS"
+        s = s[:10] + "-" + s[11:13] + "." + s[14:16] + "." + s[17:19]
+    return s
 
 
 def transform_customers(data_dir: Path) -> list:

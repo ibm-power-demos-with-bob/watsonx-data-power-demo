@@ -1,0 +1,6 @@
+paramiko>=3.0
+pandas>=2.0
+psycopg2-binary>=2.9
+kaggle>=1.6
+requests>=2.31
+ibm-cloud-sdk-core>=3.18
