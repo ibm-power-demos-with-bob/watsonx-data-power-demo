@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Test the UI's /api/wxd-query-internal endpoint from RHEL itself."""
-import paramiko
-
-HOST    = "pvm01-4r13fr3k.p604.pok-systems.techzone.ibm.com"
-USER    = "UHJ907M"
-KEY     = r"C:\Users\029878866\Downloads\pvm-4r13fr3k-key.pem"
+import paramiko, sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from reservation import RHEL_HOST as HOST, SSH_USER as USER, SSH_KEY as KEY
 
 try:
     key = paramiko.Ed25519Key.from_private_key_file(KEY)

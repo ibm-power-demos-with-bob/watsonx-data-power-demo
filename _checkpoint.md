@@ -186,14 +186,15 @@ python3 setup/_check_ui.py                       # smoke test
 
 ## Starting a New Task
 
-### Continuing with the CURRENT reservation (session 17 still active)
+### Continuing with the CURRENT reservation (session 19/20 active through 31 Oct)
 
 ```
-Continuing the watsonx.data on IBM Power demo — session 17.
-Read _checkpoint.md for the current state. The full stack is live.
-  IBM i + RHEL: UHJ907M / v07zF-4WDyP_a4x / pvm-4r13fr3k-key.pem
-  Dev Image: SSH 44574 / Presto 48872 / eu-de.services.cloud.techzone.ibm.com
-  Demo UI: http://pvm01-4r13fr3k.p604.pok-systems.techzone.ibm.com:3000
+Continuing the watsonx.data on IBM Power demo — session 20.
+Read _checkpoint.md for the current state. The full stack is live:
+  IBM i + RHEL: UH6OWE8 / a.Eh3A*03XuYEoq / pvm-edaaiu5k-key.pem
+  Dev Image: SSH 39957 / Presto 27799 / eu-de.services.cloud.techzone.ibm.com
+  Demo UI: http://pvm01-edaaiu5k.p1356.pok-systems.techzone.ibm.com:3000
+  Bond UI: http://pvm01-edaaiu5k.p1356.pok-systems.techzone.ibm.com:3000/bond-investigation
 ```
 
 ### Starting a FRESH TechZone reservation
