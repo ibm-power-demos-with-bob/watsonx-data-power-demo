@@ -34,6 +34,11 @@ with open(DATA_DIR / "industry_decade_benchmarks.json", "r", encoding="utf-8") a
 with open(DATA_DIR / "bond_semantic_corpus.json", "r", encoding="utf-8") as f:
     corpus_data = json.load(f)
 
+# Static embeddings produced offline by setup/_embed_bond_corpus.py (real Hugging Face model, not run on Power)
+with open(DATA_DIR / "bond_semantic_embeddings.json", "r", encoding="utf-8") as f:
+    emb_data = json.load(f)
+EMB_BY_DOC = {d["doc_id"]: d["embedding"] for d in emb_data["documents"]}
+
 # Connect to RHEL via SSH
 try:
     key = paramiko.Ed25519Key.from_private_key_file(KEY)
@@ -115,8 +120,17 @@ def main():
         source_year INTEGER,
         source_type VARCHAR(100),
         publication VARCHAR(150),
-        vector_similarity_score NUMERIC(4,3),
-        text TEXT
+        text TEXT,
+        embedding_model VARCHAR(100),
+        embedding TEXT
+    );
+
+    DROP TABLE IF EXISTS bond_semantic_queries CASCADE;
+    CREATE TABLE bond_semantic_queries (
+        query_id VARCHAR(20) PRIMARY KEY,
+        query_text TEXT,
+        embedding_model VARCHAR(100),
+        embedding TEXT
     );
     """
 
@@ -168,8 +182,9 @@ def main():
     # Insert bond_semantic_reviews
     print("\n=== Step 4: Populating bond_semantic_reviews ===")
     rev_inserts = []
-    for idx, doc in enumerate(corpus_data):
-        sim = round(0.94 - idx * 0.02, 3)
+    model = emb_data["model"]
+    for doc in corpus_data:
+        emb = json.dumps(EMB_BY_DOC[doc['doc_id']], separators=(",", ":"))
         txt = doc['text'].replace("'", "''")
         pub = doc['publication'].replace("'", "''")
         aname = doc['actress_name'].replace("'", "''")
@@ -178,9 +193,17 @@ def main():
         rev_inserts.append(f"""INSERT INTO bond_semantic_reviews VALUES (
             '{doc['doc_id']}', '{aname}', '{cname}', '{ftitle}',
             {doc['film_year']}, {doc['source_year']}, '{doc['source_type']}', '{pub}',
-            {sim}, '{txt}'
+            '{txt}', '{model}', '{emb}'
         );""")
-    run_cmd(f"PGPASSWORD=edbadmin psql -h localhost -U edbadmin -d olist -c \"{chr(10).join(rev_inserts)}\"", label="insert-reviews")
+    # One command per row: each embedding is ~4 KB, so a single 20-row command would be near the Linux arg limit
+    for ins in rev_inserts:
+        run_cmd(f"PGPASSWORD=edbadmin psql -h localhost -U edbadmin -d olist -c \"{ins}\"", label="insert-review")
+
+    # Insert the (single, fixed) query embedding
+    q = emb_data["query"]
+    qtxt = q["query_text"].replace("'", "''")
+    qemb = json.dumps(q["embedding"], separators=(",", ":"))
+    run_cmd(f"PGPASSWORD=edbadmin psql -h localhost -U edbadmin -d olist -c \"INSERT INTO bond_semantic_queries VALUES ('{q['query_id']}', '{qtxt}', '{model}', '{qemb}');\"", label="insert-query")
 
     # Verify rows in PostgreSQL
     print("\n=== Step 5: Verification in PostgreSQL ===")

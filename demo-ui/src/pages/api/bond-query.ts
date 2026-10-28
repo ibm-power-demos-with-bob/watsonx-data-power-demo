@@ -60,11 +60,14 @@ ORDER BY release_year ASC`
             pre_bond_avg_rating: r[3] !== null ? Number(r[3]) : null,
             post_bond_avg_rating: r[4] !== null ? Number(r[4]) : null,
             rating_delta: delta,
-            status: delta !== null && delta < 0 ? 'Negative Delta' : 'Positive Delta',
+            status: delta === null ? 'No Post-Bond Rating' : delta < 0 ? 'Negative Delta' : 'Positive Delta',
           }
         })
 
-        const avgDelta = (rows.reduce((acc, r) => acc + (r.rating_delta || 0), 0) / (rows.length || 1)).toFixed(2)
+        // Average only over rows that actually have a delta (a null delta is not a delta of 0)
+        const deltas = rows.map((r) => r.rating_delta).filter((d): d is number => d !== null)
+        const avgDelta = (deltas.reduce((a, d) => a + d, 0) / (deltas.length || 1)).toFixed(2)
+        const negCount = deltas.filter((d) => d < 0).length
 
         const result: BondQueryResult = {
           act: 1,
@@ -72,7 +75,7 @@ ORDER BY release_year ASC`
           subtitle: 'Does an actress\'s average IMDb rating drop after appearing in a Bond film?',
           sql,
           catalogsQueried: [
-            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credits & ratings (derived from ~60M IMDb credits)' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credits & ratings (derived from public IMDb datasets)' }
           ],
           executionTimeMs,
           columns: [
@@ -86,14 +89,14 @@ ORDER BY release_year ASC`
           ],
           rows,
           summaryStats: {
-            'Live Records Fetched': `${rows.length} Actresses`,
+            'Live Records Fetched': `${rows.length} Actresses (with a pre-Bond rating)`,
             'Presto Query Latency': `${executionTimeMs} ms`,
             'Average Rating Delta': `${avgDelta} pts`,
-            'Initial Conclusion': 'Apparent slight variance, easily misread as a "curse" if ungrounded'
+            'Initial Conclusion': `${negCount} of ${deltas.length} actresses (${Math.round((100 * negCount) / (deltas.length || 1))}%) show a lower average rating after Bond`
           },
           businessInsight: {
-            bondTakeaway: 'Looking only at single-column pre/post averages creates a false narrative of decline.',
-            enterpriseTranslation: 'Running a 1-table ERP report on customer spend before/after a portal launch makes revenue look down, hiding account lifecycle context.'
+            bondTakeaway: 'A single pre/post rating average gives a partial picture: it ignores career length, volume and era.',
+            enterpriseTranslation: 'A 1-table report on customer spend before/after a portal launch can mislead, because it hides account lifecycle context.'
           }
         }
         return res.status(200).json(result)
@@ -107,7 +110,8 @@ ORDER BY release_year ASC`
     ROUND(AVG(post_bond_credits_5y), 1) AS avg_post_5y,
     ROUND(AVG(post_bond_credits_lifetime), 1) AS avg_post_lifetime,
     ROUND(AVG(post_bond_active_years), 1) AS avg_active_years,
-    ROUND(AVG(rating_delta_naive), 2) AS avg_rating_delta
+    ROUND(AVG(rating_delta_naive), 2) AS avg_rating_delta,
+    COUNT(*) AS cast_rows
 FROM ${CAREER_TABLE}
 GROUP BY bond_era
 ORDER BY MIN(release_year) ASC`
@@ -123,7 +127,13 @@ ORDER BY MIN(release_year) ASC`
           avg_post_lifetime: Number(r[4]),
           avg_active_years: Number(r[5]),
           avg_rating_delta: r[6] !== null ? Number(r[6]) : 0,
+          cast_rows: Number(r[7]),
         }))
+
+        // Overall means, weighted by the number of rows behind each era average
+        const totalRows = rows.reduce((a, r) => a + r.cast_rows, 0) || 1
+        const wMean = (key: 'avg_active_years' | 'avg_post_lifetime') =>
+          (rows.reduce((a, r) => a + r[key] * r.cast_rows, 0) / totalRows).toFixed(1)
 
         const result: BondQueryResult = {
           act: 2,
@@ -131,7 +141,7 @@ ORDER BY MIN(release_year) ASC`
           subtitle: 'Did screen careers actually end, or did Bond simply set an exceptional baseline?',
           sql,
           catalogsQueried: [
-            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credit timelines (derived from ~60M IMDb credits)' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credit timelines (derived from public IMDb datasets)' }
           ],
           executionTimeMs,
           columns: [
@@ -146,12 +156,12 @@ ORDER BY MIN(release_year) ASC`
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
-            'Mean Post-Bond Career': '32.4 Active Years',
-            'Mean Post-Bond Credits': '49.8 Screen Appearances',
-            'Longevity Finding': 'Careers continued for decades; Bond was a high-volume spike, not an end.'
+            'Mean Post-Bond Career': `${wMean('avg_active_years')} Active Years (acting credits)`,
+            'Mean Post-Bond Credits': `${wMean('avg_post_lifetime')} Screen Appearances (all credits)`,
+            'Longevity Finding': 'On average, acting careers continued for decades after the Bond film.'
           },
           businessInsight: {
-            bondTakeaway: 'The supposed "curse" disappears when evaluating long-term credit volume and career span.',
+            bondTakeaway: 'Judged by credit volume and career span rather than a single rating average, most of this cast kept working.',
             enterpriseTranslation: 'High-value transactional spikes distort normal baseline trends unless evaluated across longitudinal windows.'
           }
         }
@@ -168,7 +178,8 @@ ORDER BY MIN(release_year) ASC`
     b.prior_career_years,
     ind.mean_votes_per_movie AS decade_avg_votes,
     b.post_bond_avg_score_lifetime AS weighted_success_score,
-    b.career_trajectory
+    b.career_trajectory,
+    b.bond_era
 FROM ${CAREER_TABLE} b
 JOIN pg_olist.public.industry_decade_benchmarks ind
   ON ind.decade = CONCAT(CAST((b.release_year / 10) * 10 AS VARCHAR), 's')
@@ -184,9 +195,20 @@ ORDER BY b.release_year ASC`
           age_at_bond: r[3] !== null ? Number(r[3]) : 'N/A',
           age_group: r[4],
           decade_mean_votes: Number(r[6]),
-          post_bond_avg_score: r[7] !== null ? Number(r[7]) : 'N/A',
+          post_bond_avg_score: r[7] !== null ? Number(r[7]) : '— (no rated credits)',
           career_trajectory: r[8],
         }))
+
+        // Clock summaries computed from the returned rows
+        const ages = rows.map((r) => r.age_at_bond).filter((a): a is number => typeof a === 'number')
+        const meanAge = (ages.reduce((a, b) => a + b, 0) / (ages.length || 1)).toFixed(1)
+        const eraCount = new Set(prestoResult.rows.map((r: any[]) => r[9])).size
+        const decadeOf = (y: number) => `${Math.floor(y / 10) * 10}s`
+        const firstRow = rows[0]
+        const lastRow = rows[rows.length - 1]
+        // Compare the earliest decade with the decade of highest average votes (recent films have had less time to accrue votes)
+        const peakRow = rows.reduce((best, r) => (r.decade_mean_votes > best.decade_mean_votes ? r : best), rows[0])
+        const votes = (n: number) => Math.round(n).toLocaleString('en-US')
 
         const result: BondQueryResult = {
           act: 3,
@@ -211,12 +233,13 @@ ORDER BY b.release_year ASC`
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
-            'Clock 1 (Age)': 'Average age at casting: 28.4 years',
-            'Clock 2 (Franchise)': '6 distinct eras spanning 1962–2021',
-            'Clock 3 (Vote Inflation)': '1960s avg votes (1,437) vs 2000s avg votes (6,985)'
+            'Live Records Fetched': `${rows.length} Actresses (with a decade benchmark)`,
+            'Clock 1 (Age)': `Average age at casting: ${meanAge} years`,
+            'Clock 2 (Franchise)': firstRow ? `${eraCount} distinct eras spanning ${firstRow.release_year}–${lastRow.release_year}` : 'n/a',
+            'Clock 3 (Vote Inflation)': firstRow ? `${decadeOf(firstRow.release_year)} avg votes (${votes(firstRow.decade_mean_votes)}) vs ${decadeOf(peakRow.release_year)} avg votes (${votes(peakRow.decade_mean_votes)}, peak decade)` : 'n/a'
           },
           businessInsight: {
-            bondTakeaway: 'Older films have fewer votes and different demographic distributions; controlling for decade inflation eliminates bias.',
+            bondTakeaway: 'Vote counts differ widely by decade, so raw scores from different eras are not directly comparable. Here the decade benchmark is shown as context; it is not applied as an adjustment.',
             enterpriseTranslation: 'Comparing raw customer metrics from 2012 with 2026 without normalizing for market macro conditions yields invalid conclusions.'
           }
         }
@@ -236,7 +259,8 @@ ORDER BY b.release_year ASC`
     ROUND(AVG(pre_bond_credits), 1) AS avg_pre_bond_credits,
     ROUND(AVG(post_bond_credits_lifetime), 1) AS avg_post_credits_lifetime,
     ROUND(AVG(post_bond_active_years), 1) AS avg_post_active_years,
-    ROUND(AVG(post_bond_avg_rating_lifetime), 2) AS avg_post_rating
+    ROUND(AVG(post_bond_avg_rating_lifetime), 2) AS avg_post_rating,
+    array_join(slice(array_agg(actress_name ORDER BY character_depth_score DESC, post_bond_credits_lifetime DESC), 1, 8), ', ') AS top_examples
 FROM ${CAREER_TABLE}
 GROUP BY 1
 ORDER BY avg_depth_score DESC`
@@ -253,7 +277,12 @@ ORDER BY avg_depth_score DESC`
           avg_post_credits: Number(r[5]),
           avg_active_years: Number(r[6]),
           avg_post_rating: Number(r[7]),
+          top_examples: String(r[8]),
         }))
+
+        const hi = rows.find((r) => String(r.agency_tier).startsWith('High'))
+        const lo = rows.find((r) => String(r.agency_tier).startsWith('Low'))
+        const topHigh = hi ? Array.from(new Set(hi.top_examples.split(', '))).slice(0, 5).join(', ') : 'n/a'
 
         const result: BondQueryResult = {
           act: 4,
@@ -276,33 +305,46 @@ ORDER BY avg_depth_score DESC`
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
-            'High Agency Roles': 'Diana Rigg, Michelle Yeoh, Halle Berry, Sophie Marceau, Eva Green',
-            'Key Finding': 'High-agency characters had 35+ year careers and higher pre-existing star status.',
-            'Confounder Discovered': 'Substantive roles were offered to established actors; outcome traces to casting, not a curse.'
+            'High Agency Roles': `${hi ? hi.character_count : 0} cast, e.g. ${topHigh}`,
+            'Key Finding': hi && lo
+              ? `Post-Bond career: ${hi.avg_active_years} yrs (high agency) vs ${lo.avg_active_years} yrs (low agency); post-Bond rating ${hi.avg_post_rating} vs ${lo.avg_post_rating}`
+              : 'n/a',
+            'Confounder Check': hi && lo
+              ? `Career before Bond: ${hi.avg_prior_years} yrs (high agency) vs ${lo.avg_prior_years} yrs (low agency)`
+              : 'n/a'
           },
           businessInsight: {
-            bondTakeaway: 'Role depth and prior established status dictate career outcome, not the mere association with Bond.',
-            enterpriseTranslation: 'Customer success correlates with how deeply they adopt core features, not merely whether they signed the initial contract.'
+            bondTakeaway: hi && lo
+              ? `In this sample, high-agency roles do not show longer post-Bond careers (${hi.avg_active_years} vs ${lo.avg_active_years} yrs); prior career length differs between tiers (${hi.avg_prior_years} vs ${lo.avg_prior_years} yrs). Agency scores are editorial judgments.`
+              : 'n/a',
+            enterpriseTranslation: 'Segmenting customers by a structured attribute (here, role depth) and comparing outcomes per segment tests an assumption instead of taking it for granted, even when the result is not what you expected.'
           }
         }
         return res.status(200).json(result)
       }
 
       case 5: {
-        const sql = `SELECT
-    doc_id,
-    actress_name,
-    character_name,
-    film_title,
-    film_year,
-    source_type,
-    publication,
-    vector_similarity_score AS vector_similarity,
-    text
-FROM pg_olist.public.bond_semantic_reviews
-WHERE film_year >= 1970
-ORDER BY vector_similarity_score DESC
-LIMIT 10`
+        // Real embeddings (sentence-transformers/all-MiniLM-L6-v2), computed OFFLINE on a laptop by
+        // setup/_embed_bond_corpus.py and stored as static JSON arrays. Presto computes the cosine similarity
+        // (vectors are L2-normalised, so cosine = dot product). Brute force over 20 rows: no vector index,
+        // no vector database, no model running on Power, and only the one pre-embedded query (Q1).
+        const sql = `WITH q AS (
+  SELECT query_text,
+         CAST(json_parse(CAST(embedding AS VARCHAR)) AS ARRAY(DOUBLE)) AS qv
+  FROM pg_olist.public.bond_semantic_queries
+  WHERE query_id = 'Q1'
+)
+SELECT
+    r.doc_id, r.actress_name, r.character_name, r.film_title, r.film_year,
+    r.source_type, r.publication,
+    reduce(zip_with(CAST(json_parse(CAST(r.embedding AS VARCHAR)) AS ARRAY(DOUBLE)), q.qv, (a, b) -> a * b),
+           CAST(0 AS DOUBLE), (s, x) -> s + x, s -> s) AS cosine_similarity,
+    r.text,
+    q.query_text
+FROM pg_olist.public.bond_semantic_reviews r
+CROSS JOIN q
+ORDER BY cosine_similarity DESC
+LIMIT 8`
 
         const prestoResult = await runPrestoQueryInternal(sql)
         const executionTimeMs = Date.now() - startTime
@@ -315,17 +357,19 @@ LIMIT 10`
           film_year: Number(r[4]),
           source_type: r[5],
           publication: r[6],
-          vector_similarity: Number(r[7]),
+          cosine_similarity: Number(r[7]),
           text: r[8],
         }))
+        const queryText = prestoResult.rows[0] ? String(prestoResult.rows[0][9]) : 'n/a'
 
         const result: BondQueryResult = {
           act: 5,
-          title: 'Act 5 — Questions Outgrow SQL (Semantic Search)',
-          subtitle: 'Semantic search across 60 years of contemporary press reviews, academic papers, and interviews',
+          title: 'Act 5 — Questions Outgrow SQL Columns (Similarity Ranking on Real Embeddings)',
+          subtitle: 'Ranking 20 illustrative excerpts by cosine similarity to one pre-embedded question. A static demo, not RAG.',
           sql,
           catalogsQueried: [
-            { name: 'bond_semantic_reviews', engine: 'Semantic review index', role: '60 years of reviews & interviews, scored for similarity' }
+            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '20 illustrative excerpts with stored 384-dim embeddings' },
+            { name: 'bond_semantic_queries', engine: 'Text + embedding table', role: 'One pre-embedded question (Q1)' }
           ],
           executionTimeMs,
           columns: [
@@ -334,20 +378,22 @@ LIMIT 10`
             { key: 'film_title', header: 'Film' },
             { key: 'film_year', header: 'Year', format: 'number' },
             { key: 'source_type', header: 'Source Type', format: 'tag' },
-            { key: 'publication', header: 'Publication' },
-            { key: 'vector_similarity', header: 'Vector Match', format: 'score' },
-            { key: 'text', header: 'Corpus Excerpt' },
+            { key: 'publication', header: 'Publication (label)' },
+            { key: 'cosine_similarity', header: 'Cosine Similarity', format: 'score' },
+            { key: 'text', header: 'Corpus Excerpt (illustrative)' },
           ],
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
-            'Semantic Query': '"Independent agency, technical or tactical combat equality"',
-            'Vector Matches': 'Michelle Yeoh (Col. Wai Lin), Barbara Bach (Major Amasova), Eva Green (Vesper Lynd)',
-            'Semantic Power': 'Surfaces conceptual meaning and cultural shifts without requiring keyword matches.'
+            'Question (pre-embedded)': `"${queryText}"`,
+            'Embeddings': 'all-MiniLM-L6-v2 (Hugging Face), 384-dim, computed offline on a laptop and stored as static values. No model runs on Power.',
+            'What Presto Did': 'Parsed the stored vectors and computed cosine similarity in SQL (brute force over 20 rows; no vector index or vector database).',
+            'Corpus': '20 short illustrative excerpts. Publication names are labels, not verified quotes.',
+            'What We Could Add': 'Embed new questions live (e.g. watsonx.ai), a vector store, and RAG over real, licensed review text.'
           },
           businessInsight: {
-            bondTakeaway: 'Unstructured reviews and interviews reveal the cultural perception shift that SQL columns cannot hold.',
-            enterpriseTranslation: 'Customer sentiment, warranty claims, and account manager notes hold the real explanation for churn that structured invoices miss.'
+            bondTakeaway: 'Rows are ranked by meaning, not keywords, using real embedding vectors. It only works for the one question embedded in advance, and the text is an illustrative sample, so treat it as a demonstration of the mechanism, not as evidence.',
+            enterpriseTranslation: 'Customer sentiment, warranty claims and account manager notes often hold context that structured invoices miss. We could embed them and use RAG to answer questions over them; this act shows only the similarity-ranking step.'
           }
         }
         return res.status(200).json(result)
@@ -365,12 +411,19 @@ LIMIT 10`
     b.post_bond_credits_lifetime AS post_bond_credits,
     b.post_bond_active_years AS post_active_years,
     b.career_trajectory,
-    COALESCE(MAX(v.vector_similarity_score), 0.85) AS semantic_relevance
+    MAX(v.cosine_similarity) AS agency_similarity
 FROM ${CAREER_TABLE} b
 JOIN pg_olist.public.industry_decade_benchmarks ind
   ON ind.decade = CONCAT(CAST((b.release_year / 10) * 10 AS VARCHAR), 's')
-LEFT JOIN pg_olist.public.bond_semantic_reviews v
-  ON v.actress_name = b.actress_name AND v.film_title = b.film_title
+LEFT JOIN (
+  SELECT r.actress_name, r.film_title,
+         reduce(zip_with(CAST(json_parse(CAST(r.embedding AS VARCHAR)) AS ARRAY(DOUBLE)),
+                         CAST(json_parse(CAST(q.embedding AS VARCHAR)) AS ARRAY(DOUBLE)), (a, b) -> a * b),
+                CAST(0 AS DOUBLE), (s, x) -> s + x, s -> s) AS cosine_similarity
+  FROM pg_olist.public.bond_semantic_reviews r
+  CROSS JOIN pg_olist.public.bond_semantic_queries q
+  WHERE q.query_id = 'Q1'
+) v ON v.actress_name = b.actress_name AND v.film_title = b.film_title
 GROUP BY 1,2,3,4,5,6,7,8,9
 ORDER BY b.release_year ASC, b.character_depth_score DESC`
 
@@ -387,18 +440,21 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
           post_bond_credits: Number(r[6]),
           post_active_years: Number(r[7]),
           career_trajectory: r[8],
-          semantic_relevance: Number(r[9]),
+          agency_similarity: r[9] !== null ? Number(r[9]) : '—',
         }))
+        const withText = rows.filter((r) => typeof r.agency_similarity === 'number').length
+        const thriving = rows.filter((r) => String(r.career_trajectory).startsWith('Thriving')).length
 
         const result: BondQueryResult = {
           act: 6,
           title: 'Act 6 — The Lakehouse Unified Synthesis ("The Smartphone Operating Model")',
-          subtitle: 'Fusing Relational Credits + Industry Baselines + Semantic Agency in One Presto Query',
+          subtitle: 'Joining Relational Credits + Industry Baselines + Embedding Similarity (Illustrative Text) in One Presto Query',
           sql,
           catalogsQueried: [
             { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Performer bio & lifetime credits' },
             { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Industry decade vote benchmarks' },
-            { name: 'bond_semantic_reviews', engine: 'Semantic review index', role: '60 years of reviews & transcripts, scored for similarity' }
+            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '20 illustrative excerpts with stored embeddings' },
+            { name: 'bond_semantic_queries', engine: 'Text + embedding table', role: 'One pre-embedded question (Q1)' }
           ],
           executionTimeMs,
           columns: [
@@ -411,18 +467,19 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
             { key: 'post_bond_credits', header: 'Lifetime Credits', format: 'number' },
             { key: 'post_active_years', header: 'Active Yrs', format: 'number' },
             { key: 'career_trajectory', header: 'Outcome', format: 'tag' },
-            { key: 'semantic_relevance', header: 'Semantic Agency', format: 'score' },
+            { key: 'agency_similarity', header: 'Agency Similarity (Q1)', format: 'score' },
           ],
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
-            'Catalogs Joined': '3 Sources fused in single query (Relational x Macro x Semantic)',
-            'The Final Answer': 'The "Curse" was a 1-dimensional myth created by ignoring confounding variables.',
-            'The Smartphone Value': 'watsonx.data seamlessly unites structured enterprise data with semantic AI.'
+            'Tables Joined': `Career, decade benchmark and embedding tables in one query${PRIMARY_IS_IBMI ? '; career table on Db2 for i, others on PostgreSQL' : ''}`,
+            'Embedding Evidence': `${withText} of ${rows.length} actresses have an excerpt scored against Q1 (illustrative sample, static embeddings)`,
+            'What The Data Shows': `${thriving} of ${rows.length} have a "Thriving Long-Term Career" by acting credits; no overall curse is visible here, but individual careers differ (descriptive only, not causal).`,
+            'What We Could Add': 'Live embedding of new questions (e.g. watsonx.ai), a vector store, and RAG over real review text.'
           },
           businessInsight: {
-            bondTakeaway: 'The full truth required uniting relational history, macro baselines, and unstructured semantic evidence in one query.',
-            enterpriseTranslation: 'To answer high-stakes business questions, enterprises must fuse transactional ERP (Db2 for i) with lakehouse storage and unstructured AI context.'
+            bondTakeaway: 'One query can join career history, decade benchmarks and embedding similarity. The text is a small illustrative sample, so the similarity column adds colour rather than evidence.',
+            enterpriseTranslation: 'Enterprises can join transactional data (e.g. Db2 for i) with lakehouse tables and stored embedding similarity in one query. Live embedding and RAG over real documents are what we could add.'
           }
         }
         return res.status(200).json(result)

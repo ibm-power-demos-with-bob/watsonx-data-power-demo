@@ -7,11 +7,11 @@ import { useAudience } from '../context/AudienceContext'
 
 const ACTS = [
   { num: 1, label: 'Act 1: Naive Query', subtitle: 'The 1-D Question', desc: 'Queries raw career credits for post-Bond vs pre-Bond average ratings.' },
-  { num: 2, label: 'Act 2: Relative Baseline', subtitle: 'Longevity & Volume', desc: 'Aggregates 60M credits over 60 years to measure lifetime active screen years.' },
+  { num: 2, label: 'Act 2: Relative Baseline', subtitle: 'Longevity & Volume', desc: 'Aggregates per-actress credit counts and active years, grouped by Bond era.' },
   { num: 3, label: 'Act 3: 3 Clocks Join', subtitle: 'Confounders Discovered', desc: 'Joins performer age at casting with decade-level macro vote inflation baselines.' },
   { num: 4, label: 'Act 4: Character Depth', subtitle: 'Agency Matrix', desc: 'Correlates structured 10-point character depth with long-term post-Bond career trajectory.' },
-  { num: 5, label: 'Act 5: Semantic Vectors', subtitle: 'Semantic Search', desc: 'Executes semantic similarity search across 60 years of contemporary press reviews.' },
-  { num: 6, label: 'Act 6: Lakehouse Synthesis', subtitle: 'The Smartphone Model', desc: 'Unifies relational credits, macro industry baselines, and semantic reviews in one Presto query.' },
+  { num: 5, label: 'Act 5: Beyond Structured Columns', subtitle: 'Embedding Similarity (Static Demo)', desc: 'Ranks a small illustrative text sample by cosine similarity using real, pre-computed embeddings. Live embedding and RAG are something we could add.' },
+  { num: 6, label: 'Act 6: Lakehouse Synthesis', subtitle: 'The Smartphone Model', desc: 'Joins relational credits, decade benchmarks, and stored embedding similarity in one Presto query.' },
 ]
 
 export default function BondInvestigationPage() {
