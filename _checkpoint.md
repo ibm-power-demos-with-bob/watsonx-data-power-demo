@@ -17,6 +17,15 @@
 
 ---
 
+**Session 20 (later) — Bond data source made tailorable; IBM i supported; UI de-branded.**
+
+- **UI no longer names the source DB** (no PostgreSQL / Iceberg / Milvus / Satellite wording). Catalog panel shows table name + generic type ("Relational table", "Benchmark table", "Semantic review index"). The SQL panel still shows the real catalog (`pg_olist...` / `ibmi_olist...`) — needed for the query to run.
+- **Tailorable primary source:** `BOND_PRIMARY_SOURCE=ibmi|pg` (env in `~/demo-ui/.env.local`, read by `bond-query.ts`). `ibmi` = career table in Db2 for i (`OLIST.BOND_CAREER_ANALYSIS`, loaded by `setup/9b-load-bond-data-ibmi.py`); `pg` (default) = PostgreSQL stands in (e.g. for Oracle on AIX, avoids licensing). Benchmarks + reviews always in PostgreSQL, so in `ibmi` mode Acts 3 and 6 are real cross-source joins.
+- **Switch without rebuild:** `python setup/_set_bond_source.py ibmi|pg` (~10s). Fresh deploy: `$env:BOND_PRIMARY_SOURCE='ibmi'; python setup/_deploy_ui.py`. Verify: `python setup/_verify_bond_source.py`. IBM i table check via Presto: `python setup/_test_bond_ibmi.py`.
+- **Current state: UI deployed in `ibmi` mode.** All 6 acts verified in both modes. ibmi mode is slower (Act 6 ~40s vs ~24s; Acts 1-4 ~25s vs ~12s).
+- **Honest wording for slides:** Acts 1-2 (and 4) are plain single-table SQL either DB could do. Act 3 = first join (career + industry benchmarks); genuinely cross-source only in `ibmi` mode. Act 5 "semantic" = precomputed similarity score column in a table, NOT a live Milvus/vector search (no Milvus service exists in the engines dump). Act 6 = all three in one query.
+- **Gotcha:** an interrupted `_deploy_ui.py` leaves stale `next` worker processes on the RHEL host; `pkill -f demo-ui/node_modules/next` before redeploying.
+
 **Session 20 — Bond data fix (Act 6 oddities).**
 
 - **Problem:** Grace Jones showed 0 lifetime credits / 0 active years, Denise Richards 1 credit. Cause: 5 rows in `demo-ui/src/data/bond/bond_actress_career_analysis.json` had an IMDb `nconst` pointing at a *different person with the same name* (also Jane Seymour, Barbara Bach, Daniela Bianchi).

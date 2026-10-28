@@ -21,6 +21,15 @@ from reservation import (RHEL_HOST as HOST, SSH_USER as USER, SSH_KEY as KEY,
 
 REMOTE = f"/home/{USER}/demo-ui"
 
+# Tailorable primary source for the Bond career table:
+#   pg   (default) = PostgreSQL stands in (e.g. for Oracle on AIX audiences)
+#   ibmi           = Db2 for i holds it (IBM i audiences; needs setup/9b-load-bond-data-ibmi.py)
+# Usage:  BOND_PRIMARY_SOURCE=ibmi python setup/_deploy_ui.py   (PowerShell: $env:BOND_PRIMARY_SOURCE='ibmi')
+BOND_PRIMARY_SOURCE = os.environ.get("BOND_PRIMARY_SOURCE", "pg").lower()
+if BOND_PRIMARY_SOURCE not in ("pg", "ibmi"):
+    sys.exit(f"BOND_PRIMARY_SOURCE must be 'pg' or 'ibmi', got {BOND_PRIMARY_SOURCE!r}")
+print(f"Bond primary source: {BOND_PRIMARY_SOURCE}")
+
 ENV_CONTENT = f"""\
 WXD_PRESTO_HOST={WXD_HOST}
 WXD_PRESTO_PORT={WXD_PRESTO_PORT}
@@ -29,6 +38,7 @@ WXD_PRESTO_USER={WXD_API_USER}
 WXD_PRESTO_PASSWORD={WXD_API_PASS}
 WXD_PG_CATALOG=pg_olist
 WXD_IBMI_CATALOG=ibmi_olist
+BOND_PRIMARY_SOURCE={BOND_PRIMARY_SOURCE}
 """
 
 try:

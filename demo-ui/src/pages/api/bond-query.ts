@@ -1,6 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { runPrestoQueryInternal } from './wxd-query-internal'
 
+// ---------------------------------------------------------------------------
+// Tailorable primary data source for the career table (the "system of record").
+//   BOND_PRIMARY_SOURCE=pg   (default) PostgreSQL stands in (e.g. for Oracle on AIX)
+//   BOND_PRIMARY_SOURCE=ibmi            Db2 for i holds it (IBM i audiences)
+// The benchmark and review tables always come from PostgreSQL, so with 'ibmi'
+// Acts 3 and 6 are genuine cross-source joins (Db2 for i + PostgreSQL).
+// ---------------------------------------------------------------------------
+const PRIMARY_IS_IBMI = (process.env.BOND_PRIMARY_SOURCE ?? 'pg').toLowerCase() === 'ibmi'
+const CAREER_TABLE = PRIMARY_IS_IBMI
+  ? 'ibmi_olist.olist.bond_career_analysis'
+  : 'pg_olist.public.bond_career_analysis'
+const CAREER_ENGINE = PRIMARY_IS_IBMI ? 'Db2 for i (system of record)' : 'Relational table'
+
 export interface BondQueryResult {
   act: number
   title: string
@@ -31,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     pre_bond_avg_rating,
     post_bond_avg_rating_lifetime AS post_bond_avg_rating,
     rating_delta_naive AS rating_delta
-FROM pg_olist.public.bond_career_analysis
+FROM ${CAREER_TABLE}
 WHERE pre_bond_avg_rating IS NOT NULL
 ORDER BY release_year ASC`
 
@@ -59,7 +72,7 @@ ORDER BY release_year ASC`
           subtitle: 'Does an actress\'s average IMDb rating drop after appearing in a Bond film?',
           sql,
           catalogsQueried: [
-            { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Transactional IMDb Credits & Ratings (60M rows)' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credits & ratings (derived from ~60M IMDb credits)' }
           ],
           executionTimeMs,
           columns: [
@@ -95,7 +108,7 @@ ORDER BY release_year ASC`
     ROUND(AVG(post_bond_credits_lifetime), 1) AS avg_post_lifetime,
     ROUND(AVG(post_bond_active_years), 1) AS avg_active_years,
     ROUND(AVG(rating_delta_naive), 2) AS avg_rating_delta
-FROM pg_olist.public.bond_career_analysis
+FROM ${CAREER_TABLE}
 GROUP BY bond_era
 ORDER BY MIN(release_year) ASC`
 
@@ -118,7 +131,7 @@ ORDER BY MIN(release_year) ASC`
           subtitle: 'Did screen careers actually end, or did Bond simply set an exceptional baseline?',
           sql,
           catalogsQueried: [
-            { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Career Credit Timelines (60M rows)' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Career credit timelines (derived from ~60M IMDb credits)' }
           ],
           executionTimeMs,
           columns: [
@@ -156,7 +169,7 @@ ORDER BY MIN(release_year) ASC`
     ind.mean_votes_per_movie AS decade_avg_votes,
     b.post_bond_avg_score_lifetime AS weighted_success_score,
     b.career_trajectory
-FROM pg_olist.public.bond_career_analysis b
+FROM ${CAREER_TABLE} b
 JOIN pg_olist.public.industry_decade_benchmarks ind
   ON ind.decade = CONCAT(CAST((b.release_year / 10) * 10 AS VARCHAR), 's')
 ORDER BY b.release_year ASC`
@@ -181,8 +194,8 @@ ORDER BY b.release_year ASC`
           subtitle: 'Fusing Actress Career Clock, Franchise Clock, and Decade Vote Inflation',
           sql,
           catalogsQueried: [
-            { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Performer Bio & Credits' },
-            { name: 'industry_decade_benchmarks', engine: 'Open Table Storage / Iceberg', role: 'Cinema Industry Macro Benchmarks' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Performer bio & credits' },
+            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Cinema industry macro benchmarks by decade' }
           ],
           executionTimeMs,
           columns: [
@@ -224,7 +237,7 @@ ORDER BY b.release_year ASC`
     ROUND(AVG(post_bond_credits_lifetime), 1) AS avg_post_credits_lifetime,
     ROUND(AVG(post_bond_active_years), 1) AS avg_post_active_years,
     ROUND(AVG(post_bond_avg_rating_lifetime), 2) AS avg_post_rating
-FROM pg_olist.public.bond_career_analysis
+FROM ${CAREER_TABLE}
 GROUP BY 1
 ORDER BY avg_depth_score DESC`
 
@@ -248,8 +261,7 @@ ORDER BY avg_depth_score DESC`
           subtitle: 'Is career trajectory linked to "being in Bond", or to the SUBSTANCE of the role?',
           sql,
           catalogsQueried: [
-            { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Cast Credits & Trajectories' },
-            { name: 'character_depth_matrix', engine: 'watsonx.data Lakehouse Metadata', role: 'Character Depth 10-pt Taxonomy' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Cast credits, trajectories & 10-pt character depth scores' }
           ],
           executionTimeMs,
           columns: [
@@ -309,11 +321,11 @@ LIMIT 10`
 
         const result: BondQueryResult = {
           act: 5,
-          title: 'Act 5 — Questions Outgrow SQL (Milvus Semantic Vector Search)',
+          title: 'Act 5 — Questions Outgrow SQL (Semantic Search)',
           subtitle: 'Semantic search across 60 years of contemporary press reviews, academic papers, and interviews',
           sql,
           catalogsQueried: [
-            { name: 'milvus_bond', engine: 'Milvus Vector Store in watsonx.data', role: '60 Years of Unstructured Reviews & Interviews' }
+            { name: 'bond_semantic_reviews', engine: 'Semantic review index', role: '60 years of reviews & interviews, scored for similarity' }
           ],
           executionTimeMs,
           columns: [
@@ -354,7 +366,7 @@ LIMIT 10`
     b.post_bond_active_years AS post_active_years,
     b.career_trajectory,
     COALESCE(MAX(v.vector_similarity_score), 0.85) AS semantic_relevance
-FROM pg_olist.public.bond_career_analysis b
+FROM ${CAREER_TABLE} b
 JOIN pg_olist.public.industry_decade_benchmarks ind
   ON ind.decade = CONCAT(CAST((b.release_year / 10) * 10 AS VARCHAR), 's')
 LEFT JOIN pg_olist.public.bond_semantic_reviews v
@@ -381,12 +393,12 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
         const result: BondQueryResult = {
           act: 6,
           title: 'Act 6 — The Lakehouse Unified Synthesis ("The Smartphone Operating Model")',
-          subtitle: 'Fusing Relational Credits + Iceberg Baselines + Milvus Semantic Agency in One Presto Query',
+          subtitle: 'Fusing Relational Credits + Industry Baselines + Semantic Agency in One Presto Query',
           sql,
           catalogsQueried: [
-            { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Performer Bio & Lifetime Credits (60M)' },
-            { name: 'industry_decade_benchmarks', engine: 'Apache Iceberg / Lakehouse Storage', role: 'Industry Decade Inflation Benchmarks' },
-            { name: 'milvus_bond', engine: 'Milvus Vector Store', role: '60 Years of Unstructured Reviews & Transcripts' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Performer bio & lifetime credits' },
+            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Industry decade vote benchmarks' },
+            { name: 'bond_semantic_reviews', engine: 'Semantic review index', role: '60 years of reviews & transcripts, scored for similarity' }
           ],
           executionTimeMs,
           columns: [

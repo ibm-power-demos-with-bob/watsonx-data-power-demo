@@ -143,6 +143,22 @@ python3 setup/9-load-bond-data-pg.py
 
 Expected: Creates and populates `bond_career_analysis` (43 rows), `industry_decade_benchmarks` (7 rows), and `bond_semantic_reviews` (20 rows) in the `olist` database. These are immediately queryable via Presto under the `pg_olist` catalog.
 
+#### Step 6c - Choose the Bond primary data source (tailorable per audience)
+
+The Bond investigation's career table is the demo's "system of record" and can come from either source - standard SQL, same results:
+
+| Audience | Primary source | Setup |
+|---|---|---|
+| IBM i | Db2 for i (`ibmi_olist`) | `python3 setup/9b-load-bond-data-ibmi.py` then `BOND_PRIMARY_SOURCE=ibmi` |
+| Oracle on AIX / other | PostgreSQL stands in (avoids Oracle licensing) | default (`BOND_PRIMARY_SOURCE=pg`) |
+
+The benchmark and review tables always stay in PostgreSQL, so in `ibmi` mode Acts 3 and 6 become genuine cross-source joins (Db2 for i + PostgreSQL) in one Presto query.
+
+- Fresh deploy with a choice: `BOND_PRIMARY_SOURCE=ibmi python3 setup/_deploy_ui.py` (PowerShell: `='ibmi'`)
+- Switch an already-deployed UI (no rebuild, ~10s): `python3 setup/_set_bond_source.py ibmi` or `... pg`
+- Verify all six acts and which source each used: `python3 setup/_verify_bond_source.py`
+- Note: ibmi mode is slower (Act 6 ~40s vs ~24s) because the query crosses the Satellite link to IBM i.
+
 > `v_compromised_exposure` pre-aggregates the 3-way supplier exposure join inside PostgreSQL.
 > This is what keeps the cyber incident query at ~5s rather than ~35s over the Satellite tunnel.
 > The 5s latency is intentional — the spinner makes the federation visible to the customer.

@@ -6,11 +6,11 @@ import type { BondQueryResult } from './api/bond-query'
 import { useAudience } from '../context/AudienceContext'
 
 const ACTS = [
-  { num: 1, label: 'Act 1: Naive Query', subtitle: 'The 1-D Question', desc: 'Queries raw PostgreSQL transactional credits for post-Bond vs pre-Bond average ratings.' },
+  { num: 1, label: 'Act 1: Naive Query', subtitle: 'The 1-D Question', desc: 'Queries raw career credits for post-Bond vs pre-Bond average ratings.' },
   { num: 2, label: 'Act 2: Relative Baseline', subtitle: 'Longevity & Volume', desc: 'Aggregates 60M credits over 60 years to measure lifetime active screen years.' },
   { num: 3, label: 'Act 3: 3 Clocks Join', subtitle: 'Confounders Discovered', desc: 'Joins performer age at casting with decade-level macro vote inflation baselines.' },
   { num: 4, label: 'Act 4: Character Depth', subtitle: 'Agency Matrix', desc: 'Correlates structured 10-point character depth with long-term post-Bond career trajectory.' },
-  { num: 5, label: 'Act 5: Milvus Vectors', subtitle: 'Semantic Search', desc: 'Executes semantic similarity search across 60 years of contemporary press reviews.' },
+  { num: 5, label: 'Act 5: Semantic Vectors', subtitle: 'Semantic Search', desc: 'Executes semantic similarity search across 60 years of contemporary press reviews.' },
   { num: 6, label: 'Act 6: Lakehouse Synthesis', subtitle: 'The Smartphone Model', desc: 'Unifies relational credits, macro industry baselines, and semantic reviews in one Presto query.' },
 ]
 
@@ -273,7 +273,7 @@ export default function BondInvestigationPage() {
                       Query Ready for Live Presto Execution
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--demo-text-muted)', maxWidth: 480, lineHeight: 1.5, marginBottom: 20 }}>
-                      Click <strong>"Run watsonx.data Query"</strong> to execute this statement across the live Presto engine on IBM Power and retrieve the records over the Satellite link.
+                      Click <strong>"Run watsonx.data Query"</strong> to execute this statement live through the watsonx.data Presto engine on IBM Power.
                     </div>
                     <button
                       onClick={() => executeLiveQuery(activeAct)}
@@ -309,7 +309,7 @@ export default function BondInvestigationPage() {
                       Executing Query on watsonx.data Presto Engine...
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--demo-text-muted)' }}>
-                      Connecting to PostgreSQL / Iceberg via IBM Satellite Link on RHEL Power10
+                      Querying data sources through watsonx.data on IBM Power
                     </div>
                   </div>
                 ) : (
@@ -393,7 +393,7 @@ export default function BondInvestigationPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {(data?.catalogsQueried || [
-                    { name: 'pg_olist', engine: 'PostgreSQL on IBM Power', role: 'Performer Bio & Credits' }
+                    { name: 'bond_career_analysis', engine: 'Relational table', role: 'Performer bio & credits' }
                   ]).map((cat) => (
                     <div key={cat.name} style={{
                       background: 'var(--demo-surface)',
