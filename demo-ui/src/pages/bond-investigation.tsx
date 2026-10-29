@@ -8,9 +8,9 @@ import { useAudience } from '../context/AudienceContext'
 const ACTS = [
   { num: 1, label: 'Act 1: Naive Query', subtitle: 'The 1-D Question', desc: 'Queries raw career credits for post-Bond vs pre-Bond average ratings.' },
   { num: 2, label: 'Act 2: Relative Baseline', subtitle: 'Longevity & Volume', desc: 'Aggregates per-actress credit counts and active years, grouped by Bond era.' },
-  { num: 3, label: 'Act 3: 3 Clocks Join', subtitle: 'Confounders Discovered', desc: 'Joins performer age at casting with decade-level macro vote inflation baselines.' },
+  { num: 3, label: 'Act 3: 3 Clocks Join', subtitle: 'Confounders Discovered', desc: 'Joins performer age at casting with decade-level average vote counts from a second table.' },
   { num: 4, label: 'Act 4: Character Depth', subtitle: 'Agency Matrix', desc: 'Correlates structured 10-point character depth with long-term post-Bond career trajectory.' },
-  { num: 5, label: 'Act 5: Beyond Structured Columns', subtitle: 'Embedding Similarity (Static Demo)', desc: 'Ranks a small illustrative text sample by cosine similarity using real, pre-computed embeddings. Live embedding and RAG are something we could add.' },
+  { num: 5, label: 'Act 5: Beyond Structured Columns', subtitle: 'Embedding Similarity (Static Demo)', desc: 'Ranks 148 linked excerpts (Wikipedia plus a few scholarly quotes) by cosine similarity using real, pre-computed embeddings. Live embedding and RAG are something we could add.' },
   { num: 6, label: 'Act 6: Lakehouse Synthesis', subtitle: 'The Smartphone Model', desc: 'Joins relational credits, decade benchmarks, and stored embedding similarity in one Presto query.' },
 ]
 
@@ -58,7 +58,7 @@ export default function BondInvestigationPage() {
   return (
     <>
       <Head>
-        <title>watsonx.data on IBM Power — Strategic Intelligence (The 60-Year Investigation)</title>
+        <title>watsonx.data — Strategic Intelligence (The 60-Year Investigation)</title>
       </Head>
 
       <div style={{
@@ -84,7 +84,7 @@ export default function BondInvestigationPage() {
             watsonx.data
           </HeaderName>
           <span style={{ fontSize: 12, color: 'var(--demo-text-muted)', borderLeft: '1px solid var(--demo-border)', paddingLeft: 12 }}>
-            on IBM Power · Strategic Intelligence ("Business Like a Smartphone")
+            Strategic Intelligence ("Business Like a Smartphone")
           </span>
           <div style={{ flex: 1 }} />
 
@@ -201,7 +201,7 @@ export default function BondInvestigationPage() {
                       transition: 'all 0.2s ease',
                     }}
                   >
-                    <span>{loading ? '⚡ Running Presto on Power...' : hasExecuted ? '🔄 Re-Run Live Query' : '▶ Run watsonx.data Query'}</span>
+                    <span>{loading ? '⚡ Running Presto query...' : hasExecuted ? '🔄 Re-Run Live Query' : '▶ Run watsonx.data Query'}</span>
                   </button>
                 </div>
               </div>
@@ -273,7 +273,7 @@ export default function BondInvestigationPage() {
                       Query Ready for Live Presto Execution
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--demo-text-muted)', maxWidth: 480, lineHeight: 1.5, marginBottom: 20 }}>
-                      Click <strong>"Run watsonx.data Query"</strong> to execute this statement live through the watsonx.data Presto engine on IBM Power.
+                      Click <strong>"Run watsonx.data Query"</strong> to execute this statement live through the watsonx.data Presto engine.
                     </div>
                     <button
                       onClick={() => executeLiveQuery(activeAct)}
@@ -309,7 +309,7 @@ export default function BondInvestigationPage() {
                       Executing Query on watsonx.data Presto Engine...
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--demo-text-muted)' }}>
-                      Querying data sources through watsonx.data on IBM Power
+                      Querying data sources through watsonx.data
                     </div>
                   </div>
                 ) : (
@@ -340,6 +340,14 @@ export default function BondInvestigationPage() {
                                   }}>
                                     {typeof val === 'number' ? val.toFixed(2) : val}
                                   </span>
+                                ) : col.format === 'link' ? (
+                                  typeof val === 'string' && /^https:\/\//.test(val) ? (
+                                    <a href={val} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--demo-accent, #78a9ff)', fontSize: 11 }}>
+                                      Source ↗
+                                    </a>
+                                  ) : (
+                                    '—'
+                                  )
                                 ) : col.format === 'tag' ? (
                                   <span style={{
                                     background: 'var(--demo-surface-2)',
@@ -446,6 +454,25 @@ export default function BondInvestigationPage() {
                     {data?.sql || `-- Select Act to view query plan`}
                   </pre>
                 )}
+              </div>
+
+              {/* Data provenance: what is real, derived or editorial, and where each piece runs */}
+              <div style={{
+                background: 'var(--demo-bg)',
+                border: '1px solid var(--demo-border)',
+                borderRadius: 4,
+                padding: 14,
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--demo-text-muted)', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  About this demo's data
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, lineHeight: 1.5, color: 'var(--demo-text-muted)' }}>
+                  <li><strong>Credits, ratings, votes, decade averages:</strong> derived from the public IMDb datasets (non-commercial use).</li>
+                  <li><strong>Cast list:</strong> 88 film roles: an initial curated list of 43, plus 45 added from the Fandom "Bond Girl Actresses" category. Most names also appear on MI6-HQ. It is a sample to show data coming together, not an exhaustive list.</li>
+                  <li><strong>Character attributes (agency score, role category, survives the film, takes part in the climax):</strong> not in IMDb. Hand-curated for this demo and loaded next to the IMDb-derived columns. In a real business this is the kind of data held in another system, which you would federate in.</li>
+                  <li><strong>Text excerpts:</strong> English Wikipedia (CC BY-SA 4.0), linked to the exact revision, plus 7 short attributed quotes from Lisa Funnell, "Nomi/No Me?" (Flow, 2019). The Act 4 scholarship note cites the Flow article and the Participations survey paper (both read in full) and published abstracts for the rest.</li>
+                  <li><strong>Where it runs:</strong> the PostgreSQL (RHEL) and Db2 for i sources run on IBM Power. The watsonx.data Presto engine in this demo runs on x86 (VMware); watsonx.data is supported on IBM Power.</li>
+                </ul>
               </div>
 
               {/* The Commercial Bridge to Business on Monday */}

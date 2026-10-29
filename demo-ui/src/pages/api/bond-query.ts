@@ -12,7 +12,7 @@ const PRIMARY_IS_IBMI = (process.env.BOND_PRIMARY_SOURCE ?? 'pg').toLowerCase() 
 const CAREER_TABLE = PRIMARY_IS_IBMI
   ? 'ibmi_olist.olist.bond_career_analysis'
   : 'pg_olist.public.bond_career_analysis'
-const CAREER_ENGINE = PRIMARY_IS_IBMI ? 'Db2 for i (system of record)' : 'Relational table'
+const CAREER_ENGINE = PRIMARY_IS_IBMI ? 'Db2 for i' : 'Relational table'
 
 export interface BondQueryResult {
   act: number
@@ -21,7 +21,7 @@ export interface BondQueryResult {
   sql: string
   catalogsQueried: Array<{ name: string; engine: string; role: string }>
   executionTimeMs: number
-  columns: Array<{ key: string; header: string; format?: 'number' | 'score' | 'tag' | 'text' }>
+  columns: Array<{ key: string; header: string; format?: 'number' | 'score' | 'tag' | 'text' | 'link' }>
   rows: any[]
   summaryStats: Record<string, string | number>
   businessInsight: {
@@ -92,7 +92,8 @@ ORDER BY release_year ASC`
             'Live Records Fetched': `${rows.length} Actresses (with a pre-Bond rating)`,
             'Presto Query Latency': `${executionTimeMs} ms`,
             'Average Rating Delta': `${avgDelta} pts`,
-            'Initial Conclusion': `${negCount} of ${deltas.length} actresses (${Math.round((100 * negCount) / (deltas.length || 1))}%) show a lower average rating after Bond`
+            'Initial Conclusion': `${negCount} of ${deltas.length} actresses (${Math.round((100 * negCount) / (deltas.length || 1))}%) show a lower average rating after Bond`,
+            'Caveat (Ratings Are Crowd Data)': 'IMDb ratings come from audiences, not critics. Lisa Funnell (Flow, 2019) describes campaigns that flood review sites with negative comments, sometimes before a film is released, in reaction to casting choices. A rating can reflect that reaction as well as the performance.'
           },
           businessInsight: {
             bondTakeaway: 'A single pre/post rating average gives a partial picture: it ignores career length, volume and era.',
@@ -213,11 +214,11 @@ ORDER BY b.release_year ASC`
         const result: BondQueryResult = {
           act: 3,
           title: 'Act 3 — The 3-Clock Confounder Model',
-          subtitle: 'Fusing Actress Career Clock, Franchise Clock, and Decade Vote Inflation',
+          subtitle: 'Fusing Actress Career Clock, Franchise Clock, and Decade Vote Volume',
           sql,
           catalogsQueried: [
             { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Performer bio & credits' },
-            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Cinema industry macro benchmarks by decade' }
+            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Per-decade film averages computed from the public IMDb title and ratings datasets' }
           ],
           executionTimeMs,
           columns: [
@@ -227,7 +228,7 @@ ORDER BY b.release_year ASC`
             { key: 'age_at_bond', header: 'Age at Bond', format: 'number' },
             { key: 'age_group', header: 'Career Stage', format: 'tag' },
             { key: 'decade_mean_votes', header: 'Decade Avg Votes', format: 'number' },
-            { key: 'post_bond_avg_score', header: 'Weighted Score', format: 'score' },
+            { key: 'post_bond_avg_score', header: 'Vote-Weighted Score (derived)', format: 'score' },
             { key: 'career_trajectory', header: 'Trajectory', format: 'tag' },
           ],
           rows,
@@ -236,7 +237,8 @@ ORDER BY b.release_year ASC`
             'Live Records Fetched': `${rows.length} Actresses (with a decade benchmark)`,
             'Clock 1 (Age)': `Average age at casting: ${meanAge} years`,
             'Clock 2 (Franchise)': firstRow ? `${eraCount} distinct eras spanning ${firstRow.release_year}–${lastRow.release_year}` : 'n/a',
-            'Clock 3 (Vote Inflation)': firstRow ? `${decadeOf(firstRow.release_year)} avg votes (${votes(firstRow.decade_mean_votes)}) vs ${decadeOf(peakRow.release_year)} avg votes (${votes(peakRow.decade_mean_votes)}, peak decade)` : 'n/a'
+            'Clock 3 (Decade Vote Volume)': firstRow ? `${decadeOf(firstRow.release_year)} avg votes per film (${votes(firstRow.decade_mean_votes)}) vs ${decadeOf(peakRow.release_year)} (${votes(peakRow.decade_mean_votes)}, peak decade)` : 'n/a',
+            'Caveat (Ratings Are Crowd Data)': 'Votes and scores are audience behaviour. Lisa Funnell (Flow, 2019) notes organised negative-comment campaigns against casting choices on review sites, so a score can carry audience reaction as well as the work itself.'
           },
           businessInsight: {
             bondTakeaway: 'Vote counts differ widely by decade, so raw scores from different eras are not directly comparable. Here the decade benchmark is shown as context; it is not applied as an adjustment.',
@@ -290,13 +292,13 @@ ORDER BY avg_depth_score DESC`
           subtitle: 'Is career trajectory linked to "being in Bond", or to the SUBSTANCE of the role?',
           sql,
           catalogsQueried: [
-            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Cast credits, trajectories & 10-pt character depth scores' }
+            { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'IMDb-derived credits & trajectories, plus hand-curated character attributes IMDb does not hold (10-pt depth score)' }
           ],
           executionTimeMs,
           columns: [
             { key: 'agency_tier', header: 'Agency Tier' },
             { key: 'character_count', header: 'Count', format: 'number' },
-            { key: 'avg_depth_score', header: 'Avg Depth Score', format: 'score' },
+            { key: 'avg_depth_score', header: 'Avg Depth Score (editorial)', format: 'score' },
             { key: 'avg_prior_years', header: 'Avg Prior Career (Yrs)', format: 'number' },
             { key: 'avg_post_credits', header: 'Avg Lifetime Post-Credits', format: 'number' },
             { key: 'avg_active_years', header: 'Avg Post-Bond Career (Yrs)', format: 'number' },
@@ -311,13 +313,14 @@ ORDER BY avg_depth_score DESC`
               : 'n/a',
             'Confounder Check': hi && lo
               ? `Career before Bond: ${hi.avg_prior_years} yrs (high agency) vs ${lo.avg_prior_years} yrs (low agency)`
-              : 'n/a'
+              : 'n/a',
+            'What Scholarship Says (Funnell)': 'Craig era (Funnell, 2018): the Bond Girl archetype is deconstructed across Casino Royale, Quantum of Solace and Skyfall, with its qualities spread over at least two characters per film. That opens space for "outlier women" (Vesper Lynd, Camille Montes, M). In Spectre the archetype returns through Madeleine Swann, read as a composite of earlier Bond Girls, and a more traditional order is reinstated. In our own scores Vesper (9) and Camille (8) rate high; M is not in our cast list. Three phases (Funnell, 2008): English Partner (1962-69), American Side-Kick (1971-89), Action Hero (1995-2002). Audience view (Funnell & Johnson, Participations 2020; survey of 511 US adults, Oct 2019): 50.5% felt representation of women in Bond had improved, 61% called today\'s Bond Girls strong and empowered, and the top valued qualities were proficiency as spies (57.9%), intellectual skills (57.5%), looks (53.6%) and fighting ability (51.3%). That is opinion, not film data. Sources: the survey paper and the Flow article read in full, the Craig-era and phase items from journal abstracts only. Our agency scores are separate editorial judgments, not a test of her claims.'
           },
           businessInsight: {
             bondTakeaway: hi && lo
               ? `In this sample, high-agency roles do not show longer post-Bond careers (${hi.avg_active_years} vs ${lo.avg_active_years} yrs); prior career length differs between tiers (${hi.avg_prior_years} vs ${lo.avg_prior_years} yrs). Agency scores are editorial judgments.`
               : 'n/a',
-            enterpriseTranslation: 'Segmenting customers by a structured attribute (here, role depth) and comparing outcomes per segment tests an assumption instead of taking it for granted, even when the result is not what you expected.'
+            enterpriseTranslation: 'IMDb cannot tell you whether a character survived the film or what she did in it. That has to come from another source, just as customer risk tier, contract terms or service history sit outside your transaction data. Bringing it in lets you segment and test an assumption, even when the result is not what you expected.'
           }
         }
         return res.status(200).json(result)
@@ -326,7 +329,7 @@ ORDER BY avg_depth_score DESC`
       case 5: {
         // Real embeddings (sentence-transformers/all-MiniLM-L6-v2), computed OFFLINE on a laptop by
         // setup/_embed_bond_corpus.py and stored as static JSON arrays. Presto computes the cosine similarity
-        // (vectors are L2-normalised, so cosine = dot product). Brute force over 20 rows: no vector index,
+        // (vectors are L2-normalised, so cosine = dot product). Brute force over 148 rows: no vector index,
         // no vector database, no model running on Power, and only the one pre-embedded query (Q1).
         const sql = `WITH q AS (
   SELECT query_text,
@@ -336,7 +339,7 @@ ORDER BY avg_depth_score DESC`
 )
 SELECT
     r.doc_id, r.actress_name, r.character_name, r.film_title, r.film_year,
-    r.source_type, r.publication,
+    r.source_type, r.publication, r.source_url,
     reduce(zip_with(CAST(json_parse(CAST(r.embedding AS VARCHAR)) AS ARRAY(DOUBLE)), q.qv, (a, b) -> a * b),
            CAST(0 AS DOUBLE), (s, x) -> s + x, s -> s) AS cosine_similarity,
     r.text,
@@ -357,18 +360,19 @@ LIMIT 8`
           film_year: Number(r[4]),
           source_type: r[5],
           publication: r[6],
-          cosine_similarity: Number(r[7]),
-          text: r[8],
+          source_url: r[7],
+          cosine_similarity: Number(r[8]),
+          text: r[9],
         }))
-        const queryText = prestoResult.rows[0] ? String(prestoResult.rows[0][9]) : 'n/a'
+        const queryText = prestoResult.rows[0] ? String(prestoResult.rows[0][10]) : 'n/a'
 
         const result: BondQueryResult = {
           act: 5,
           title: 'Act 5 — Questions Outgrow SQL Columns (Similarity Ranking on Real Embeddings)',
-          subtitle: 'Ranking 20 illustrative excerpts by cosine similarity to one pre-embedded question. A static demo, not RAG.',
+          subtitle: 'Ranking 148 linked excerpts (141 Wikipedia, 7 scholarly commentary) by cosine similarity to one pre-embedded question. A static demo, not RAG.',
           sql,
           catalogsQueried: [
-            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '20 illustrative excerpts with stored 384-dim embeddings' },
+            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '148 linked excerpts (141 Wikipedia CC BY-SA, 7 short quotes from L. Funnell, Flow 2019) with stored 384-dim embeddings' },
             { name: 'bond_semantic_queries', engine: 'Text + embedding table', role: 'One pre-embedded question (Q1)' }
           ],
           executionTimeMs,
@@ -377,22 +381,23 @@ LIMIT 8`
             { key: 'character_name', header: 'Character' },
             { key: 'film_title', header: 'Film' },
             { key: 'film_year', header: 'Year', format: 'number' },
-            { key: 'source_type', header: 'Source Type', format: 'tag' },
-            { key: 'publication', header: 'Publication (label)' },
             { key: 'cosine_similarity', header: 'Cosine Similarity', format: 'score' },
-            { key: 'text', header: 'Corpus Excerpt (illustrative)' },
+            { key: 'publication', header: 'Source' },
+            { key: 'text', header: 'Excerpt' },
+            { key: 'source_url', header: 'Source (permalink)', format: 'link' },
           ],
           rows,
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
             'Question (pre-embedded)': `"${queryText}"`,
-            'Embeddings': 'all-MiniLM-L6-v2 (Hugging Face), 384-dim, computed offline on a laptop and stored as static values. No model runs on Power.',
-            'What Presto Did': 'Parsed the stored vectors and computed cosine similarity in SQL (brute force over 20 rows; no vector index or vector database).',
-            'Corpus': '20 short illustrative excerpts. Publication names are labels, not verified quotes.',
-            'What We Could Add': 'Embed new questions live (e.g. watsonx.ai), a vector store, and RAG over real, licensed review text.'
+            'Embeddings': 'all-MiniLM-L6-v2 (Hugging Face), 384-dim, computed offline on a laptop and stored as static values. No embedding model runs in the database or in Presto.',
+            'What Presto Did': 'Parsed the stored vectors and computed cosine similarity in SQL (brute force over 148 rows; no vector index or vector database).',
+            'Corpus': '141 verbatim excerpts from English Wikipedia actress articles (CC BY-SA 4.0, linked to the exact revision) plus 7 short attributed quotes from Lisa Funnell, "Nomi/No Me?", Flow 26.1 (2019). The Wikipedia text is biography; the Funnell quotes are scholarly commentary on agency and representation.',
+            'Reading The Scores': 'Biographies rarely discuss a character\'s agency, so similarity scores are modest. The ranking shows the mechanism; it is not evidence about the roles.',
+            'What We Could Add': 'Embed new questions live (e.g. watsonx.ai), a vector store, and RAG over licensed review text.'
           },
           businessInsight: {
-            bondTakeaway: 'Rows are ranked by meaning, not keywords, using real embedding vectors. It only works for the one question embedded in advance, and the text is an illustrative sample, so treat it as a demonstration of the mechanism, not as evidence.',
+            bondTakeaway: 'Rows are ranked by meaning, not keywords, using real embedding vectors over real, linked source text. It only works for the one question embedded in advance, so treat it as a demonstration of the mechanism, not as evidence.',
             enterpriseTranslation: 'Customer sentiment, warranty claims and account manager notes often hold context that structured invoices miss. We could embed them and use RAG to answer questions over them; this act shows only the similarity-ranking step.'
           }
         }
@@ -448,12 +453,12 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
         const result: BondQueryResult = {
           act: 6,
           title: 'Act 6 — The Lakehouse Unified Synthesis ("The Smartphone Operating Model")',
-          subtitle: 'Joining Relational Credits + Industry Baselines + Embedding Similarity (Illustrative Text) in One Presto Query',
+          subtitle: 'Joining Relational Credits + Industry Baselines + Embedding Similarity (Linked Text) in One Presto Query',
           sql,
           catalogsQueried: [
             { name: 'bond_career_analysis', engine: CAREER_ENGINE, role: 'Performer bio & lifetime credits' },
-            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Industry decade vote benchmarks' },
-            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '20 illustrative excerpts with stored embeddings' },
+            { name: 'industry_decade_benchmarks', engine: 'Benchmark table', role: 'Per-decade film averages computed from the public IMDb datasets' },
+            { name: 'bond_semantic_reviews', engine: 'Text + embedding table', role: '148 linked excerpts (Wikipedia + Funnell/Flow) with stored embeddings' },
             { name: 'bond_semantic_queries', engine: 'Text + embedding table', role: 'One pre-embedded question (Q1)' }
           ],
           executionTimeMs,
@@ -463,7 +468,7 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
             { key: 'film_title', header: 'Film' },
             { key: 'release_year', header: 'Year', format: 'number' },
             { key: 'bond_era', header: 'Era', format: 'tag' },
-            { key: 'character_depth_score', header: 'Agency Score', format: 'score' },
+            { key: 'character_depth_score', header: 'Agency Score (editorial)', format: 'score' },
             { key: 'post_bond_credits', header: 'Lifetime Credits', format: 'number' },
             { key: 'post_active_years', header: 'Active Yrs', format: 'number' },
             { key: 'career_trajectory', header: 'Outcome', format: 'tag' },
@@ -473,12 +478,12 @@ ORDER BY b.release_year ASC, b.character_depth_score DESC`
           summaryStats: {
             'Presto Query Latency': `${executionTimeMs} ms`,
             'Tables Joined': `Career, decade benchmark and embedding tables in one query${PRIMARY_IS_IBMI ? '; career table on Db2 for i, others on PostgreSQL' : ''}`,
-            'Embedding Evidence': `${withText} of ${rows.length} actresses have an excerpt scored against Q1 (illustrative sample, static embeddings)`,
+            'Embedding Evidence': `${withText} of ${rows.length} rows have a linked excerpt scored against Q1 (best match shown; static embeddings)`,
             'What The Data Shows': `${thriving} of ${rows.length} have a "Thriving Long-Term Career" by acting credits; no overall curse is visible here, but individual careers differ (descriptive only, not causal).`,
-            'What We Could Add': 'Live embedding of new questions (e.g. watsonx.ai), a vector store, and RAG over real review text.'
+            'What We Could Add': 'Live embedding of new questions (e.g. watsonx.ai), a vector store, and RAG over licensed review text.'
           },
           businessInsight: {
-            bondTakeaway: 'One query can join career history, decade benchmarks and embedding similarity. The text is a small illustrative sample, so the similarity column adds colour rather than evidence.',
+            bondTakeaway: 'One query can join career history, decade benchmarks and embedding similarity. The text is mostly Wikipedia biography (plus a few scholarly quotes), which says little about agency, so the similarity column shows the join working rather than adding evidence.',
             enterpriseTranslation: 'Enterprises can join transactional data (e.g. Db2 for i) with lakehouse tables and stored embedding similarity in one query. Live embedding and RAG over real documents are what we could add.'
           }
         }

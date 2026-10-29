@@ -120,6 +120,9 @@ def main():
         source_year INTEGER,
         source_type VARCHAR(100),
         publication VARCHAR(150),
+        source_url VARCHAR(400),
+        licence VARCHAR(50),
+        retrieved_at VARCHAR(20),
         text TEXT,
         embedding_model VARCHAR(100),
         embedding TEXT
@@ -183,21 +186,27 @@ def main():
     print("\n=== Step 4: Populating bond_semantic_reviews ===")
     rev_inserts = []
     model = emb_data["model"]
+
+    def q(s):
+        return str(s).replace("'", "''")
+
     for doc in corpus_data:
         emb = json.dumps(EMB_BY_DOC[doc['doc_id']], separators=(",", ":"))
-        txt = doc['text'].replace("'", "''")
-        pub = doc['publication'].replace("'", "''")
-        aname = doc['actress_name'].replace("'", "''")
-        cname = doc['character_name'].replace("'", "''")
-        ftitle = doc['film_title'].replace("'", "''")
         rev_inserts.append(f"""INSERT INTO bond_semantic_reviews VALUES (
-            '{doc['doc_id']}', '{aname}', '{cname}', '{ftitle}',
-            {doc['film_year']}, {doc['source_year']}, '{doc['source_type']}', '{pub}',
-            '{txt}', '{model}', '{emb}'
+            '{q(doc['doc_id'])}', '{q(doc['actress_name'])}', '{q(doc['character_name'])}', '{q(doc['film_title'])}',
+            {doc['film_year']}, {doc['source_year']}, '{q(doc['source_type'])}', '{q(doc['publication'])}',
+            '{q(doc['source_url'])}', '{q(doc['licence'])}', '{q(doc['retrieved_at'])}',
+            '{q(doc['text'])}', '{q(model)}', '{emb}'
         );""")
-    # One command per row: each embedding is ~4 KB, so a single 20-row command would be near the Linux arg limit
-    for ins in rev_inserts:
-        run_cmd(f"PGPASSWORD=edbadmin psql -h localhost -U edbadmin -d olist -c \"{ins}\"", label="insert-review")
+    # Wikipedia text contains double quotes, so the SQL is sent on psql's stdin (no shell quoting, no arg-length limit)
+    stdin, out, err = c.exec_command("PGPASSWORD=edbadmin psql -v ON_ERROR_STOP=1 -q -h localhost -U edbadmin -d olist -f -")
+    stdin.write("\n".join(rev_inserts))
+    stdin.channel.shutdown_write()
+    rc = out.channel.recv_exit_status()
+    if rc != 0:
+        print(f"[insert-reviews] ERR ({rc}): {err.read().decode('utf-8', errors='replace')[:400]}")
+    else:
+        print(f"[insert-reviews] OK: {len(rev_inserts)} rows")
 
     # Insert the (single, fixed) query embedding
     q = emb_data["query"]
