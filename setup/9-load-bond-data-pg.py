@@ -96,7 +96,13 @@ def main():
         post_bond_active_years INTEGER,
         rating_delta_naive NUMERIC(4,2),
         career_trajectory VARCHAR(100),
-        character_description TEXT
+        character_description TEXT,
+        editorial_depth_score INTEGER,
+        agency_source VARCHAR(60),
+        agency_confidence VARCHAR(30),
+        agency_evidence_chars INTEGER,
+        agency_evidence TEXT,
+        fandom_page_url VARCHAR(400)
     );
 
     DROP TABLE IF EXISTS industry_decade_benchmarks CASCADE;
@@ -165,12 +171,21 @@ def main():
             {r['intelligence_or_combat_role']}, {r['survives_film']}, {age}, '{r['age_group']}',
             {r['prior_career_years']}, {r['pre_bond_credits']}, {pre_r}, {pre_s},
             {r['post_bond_credits_5y']}, {post_5_r}, {r['post_bond_credits_lifetime']}, {post_l_r}, {post_l_s},
-            {r['post_bond_active_years']}, {delta}, '{r['career_trajectory']}', '{desc}'
+            {r['post_bond_active_years']}, {delta}, '{r['career_trajectory']}', '{desc}',
+            {r['editorial_depth_score']}, '{r['agency_source'].replace("'", "''")}', '{r['agency_confidence']}',
+            {r['agency_evidence_chars']}, '{r['agency_evidence'].replace("'", "''")}', '{r['fandom_page_url'].replace("'", "''")}'
         );"""
         insert_stmts.append(stmt)
 
-    all_inserts = "\n".join(insert_stmts)
-    run_cmd(f"PGPASSWORD=edbadmin psql -h localhost -U edbadmin -d olist -c \"{all_inserts}\"", label="insert-career")
+    # Evidence text contains double quotes, so send the SQL on psql's stdin (no shell quoting)
+    stdin, out, err = c.exec_command("PGPASSWORD=edbadmin psql -v ON_ERROR_STOP=1 -q -h localhost -U edbadmin -d olist -f -")
+    stdin.write("\n".join(insert_stmts))
+    stdin.channel.shutdown_write()
+    rc = out.channel.recv_exit_status()
+    if rc != 0:
+        print(f"[insert-career] ERR ({rc}): {err.read().decode('utf-8', errors='replace')[:400]}")
+    else:
+        print(f"[insert-career] OK: {len(insert_stmts)} rows")
 
     # Insert industry_decade_benchmarks
     print("\n=== Step 3: Populating industry_decade_benchmarks ===")

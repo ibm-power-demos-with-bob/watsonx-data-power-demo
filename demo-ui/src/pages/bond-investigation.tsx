@@ -9,8 +9,8 @@ const ACTS = [
   { num: 1, label: 'Act 1: Naive Query', subtitle: 'The 1-D Question', desc: 'Queries raw career credits for post-Bond vs pre-Bond average ratings.' },
   { num: 2, label: 'Act 2: Relative Baseline', subtitle: 'Longevity & Volume', desc: 'Aggregates per-actress credit counts and active years, grouped by Bond era.' },
   { num: 3, label: 'Act 3: 3 Clocks Join', subtitle: 'Confounders Discovered', desc: 'Joins performer age at casting with decade-level average vote counts from a second table.' },
-  { num: 4, label: 'Act 4: Character Depth', subtitle: 'Agency Matrix', desc: 'Correlates structured 10-point character depth with long-term post-Bond career trajectory.' },
-  { num: 5, label: 'Act 5: Beyond Structured Columns', subtitle: 'Embedding Similarity (Static Demo)', desc: 'Ranks 148 linked excerpts (Wikipedia plus a few scholarly quotes) by cosine similarity using real, pre-computed embeddings. Live embedding and RAG are something we could add.' },
+  { num: 4, label: 'Act 4: Character Depth', subtitle: 'Agency Matrix', desc: 'Correlates a 10-point character depth score, derived from James Bond Wiki text, with long-term post-Bond career trajectory.' },
+  { num: 5, label: 'Act 5: Beyond Structured Columns', subtitle: 'Embedding Similarity (Static Demo)', desc: 'Ranks 231 linked excerpts (Bond Wiki character pages, Wikipedia, a few scholarly quotes) by cosine similarity using real, pre-computed embeddings. Live embedding and RAG are something we could add.' },
   { num: 6, label: 'Act 6: Lakehouse Synthesis', subtitle: 'The Smartphone Model', desc: 'Joins relational credits, decade benchmarks, and stored embedding similarity in one Presto query.' },
 ]
 
@@ -162,7 +162,8 @@ export default function BondInvestigationPage() {
               background: 'var(--demo-bg)',
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden',
+              overflowY: 'auto',
+              minHeight: 0,
               padding: 20,
             }}>
               {/* Act Header & Live Execution Trigger */}
@@ -225,7 +226,7 @@ export default function BondInvestigationPage() {
               {hasExecuted && data && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: `repeat(${Object.keys(data.summaryStats).length}, 1fr)`,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                   gap: 12,
                   marginBottom: 16,
                   flexShrink: 0,
@@ -251,6 +252,7 @@ export default function BondInvestigationPage() {
               {/* Main Table / Unexecuted Placeholder */}
               <div style={{
                 flex: 1,
+                minHeight: 240,
                 overflow: 'auto',
                 border: '1px solid var(--demo-border)',
                 borderRadius: 4,
@@ -371,6 +373,53 @@ export default function BondInvestigationPage() {
                   </table>
                 )}
               </div>
+
+              {/* Methodological Context & Scholarship Notes */}
+              {hasExecuted && data?.notes && Object.keys(data.notes).length > 0 && (
+                <div style={{
+                  marginTop: 16,
+                  background: 'var(--demo-surface)',
+                  border: '1px solid var(--demo-border)',
+                  borderRadius: 4,
+                  padding: '14px 16px',
+                  flexShrink: 0,
+                }}>
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--demo-blue)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}>
+                    <span>📚</span> Methodological Context & Scholarship
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                    gap: 12,
+                  }}>
+                    {Object.entries(data.notes).map(([title, content]) => (
+                      <div key={title} style={{
+                        background: 'var(--demo-bg)',
+                        border: '1px solid var(--demo-border)',
+                        borderRadius: 4,
+                        padding: '10px 14px',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--demo-text)', marginBottom: 4 }}>
+                          {title}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--demo-text-muted)', lineHeight: 1.5 }}>
+                          {content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right: Technical Query Details & Business Bridge */}
@@ -469,8 +518,8 @@ export default function BondInvestigationPage() {
                 <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, lineHeight: 1.5, color: 'var(--demo-text-muted)' }}>
                   <li><strong>Credits, ratings, votes, decade averages:</strong> derived from the public IMDb datasets (non-commercial use).</li>
                   <li><strong>Cast list:</strong> 88 film roles: an initial curated list of 43, plus 45 added from the Fandom "Bond Girl Actresses" category. Most names also appear on MI6-HQ. It is a sample to show data coming together, not an exhaustive list.</li>
-                  <li><strong>Character attributes (agency score, role category, survives the film, takes part in the climax):</strong> not in IMDb. Hand-curated for this demo and loaded next to the IMDb-derived columns. In a real business this is the kind of data held in another system, which you would federate in.</li>
-                  <li><strong>Text excerpts:</strong> English Wikipedia (CC BY-SA 4.0), linked to the exact revision, plus 7 short attributed quotes from Lisa Funnell, "Nomi/No Me?" (Flow, 2019). The Act 4 scholarship note cites the Flow article and the Participations survey paper (both read in full) and published abstracts for the rest.</li>
+                  <li><strong>Character attributes (agency score, survives the film, takes part in the climax, independent objective, expertise, combat or intelligence role):</strong> not in IMDb. Derived from the Biography and Personality text of each character's James Bond Wiki (Fandom, CC BY-SA) page with a simple keyword rubric; the supporting sentence for each flag and the earlier hand-typed score are stored beside it. Rows with a short or missing page are marked low-confidence or editorial-only. Role category and occupation are still hand-typed. This is unstructured text turned into structured columns and joined to the IMDb-derived ones; the rubric is crude and some scores will look wrong to a Bond fan.</li>
+                  <li><strong>Text excerpts:</strong> James Bond Wiki character pages (CC BY-SA, linked to the exact revision), English Wikipedia actress articles (CC BY-SA 4.0, linked to the exact revision), plus 7 short attributed quotes from Lisa Funnell, "Nomi/No Me?" (Flow, 2019). The Act 4 scholarship note cites the Flow article and the Participations survey paper (both read in full) and published abstracts for the rest.</li>
                   <li><strong>Where it runs:</strong> the PostgreSQL (RHEL) and Db2 for i sources run on IBM Power. The watsonx.data Presto engine in this demo runs on x86 (VMware); watsonx.data is supported on IBM Power.</li>
                 </ul>
               </div>

@@ -48,6 +48,10 @@ COLS = [
     ("post_bond_avg_score_lifetime", "DECIMAL(4,2)"), ("post_bond_active_years", "INTEGER"),
     ("rating_delta_naive", "DECIMAL(4,2)"), ("career_trajectory", "VARCHAR(100)"),
     ("character_description", "VARCHAR(500)"),
+    # Agency derived from James Bond Wiki (Fandom) text; editorial_depth_score = the earlier hand-typed score
+    ("editorial_depth_score", "INTEGER"), ("agency_source", "VARCHAR(60)"),
+    ("agency_confidence", "VARCHAR(30)"), ("agency_evidence_chars", "INTEGER"),
+    ("agency_evidence", "VARCHAR(2000)"), ("fandom_page_url", "VARCHAR(400)"),
 ]
 
 

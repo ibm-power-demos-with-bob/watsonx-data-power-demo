@@ -1,4 +1,31 @@
 # 🔖 Checkpoint — watsonx.data on IBM Power Demo
+## Session 26 — UI layout refactoring & server hardening against ECONNRESET (deployed, `ibmi` mode)
+
+- **Crash Root Cause Identified:** The overnight stoppage was caused by `Error: read ECONNRESET` on a socket (`node:events:491: throw er; Unhandled 'error' event`), which occurs when idle client/proxy TCP connections are reset by the TechZone network layer. Standard `next start` does not catch socket-level `ECONNRESET` / `EPIPE` events, terminating the Node.js process.
+- **Server Hardening Applied:** Ported the hardening pattern from `Carbon-GenAI-Demos`:
+  - Added [`demo-ui/server.js`](demo-ui/server.js) — an explicit Node.js HTTP server wrapper with listeners on `res.on('error')`, `server.on('clientError')`, `server.on('error')`, and `process.on('uncaughtException')` that specifically catch and swallow `ECONNRESET` / `EPIPE` socket disconnects.
+  - Updated `demo-ui/package.json` `"start": "node server.js"`.
+  - Redeployed and verified live on RHEL host.
+- **UI & Act 4 Layout Fixes:**
+  - Separated `summaryStats` in `demo-ui/src/pages/api/bond-query.ts` into clean, concise KPI metric cards (`repeat(auto-fit, minmax(180px, 1fr))`).
+  - Moved long narrative paragraphs (Funnell scholarship, rubric notes, wiki text methodology) into a structured `notes` section rendered below the table in `demo-ui/src/pages/bond-investigation.tsx`.
+  - Added `overflowY: 'auto'` and `minHeight: 240px` to ensure the table and notes are immediately visible and scrollable.
+- **Result:** The 3-tier comparative matrix in Act 4 (High, Moderate, Low Agency) is immediately visible, legible, and the user can smoothly scroll to examine both the table rows and all academic / rubric notes.
+- **Redeployed:** Redeployed to RHEL with `$env:BOND_PRIMARY_SOURCE='ibmi'; python setup/_deploy_ui.py`. Verified HTTP 200 and live queries on all 6 acts.
+
+## Session 25 — Agency scores now derived from James Bond Wiki (Fandom) text (deployed, `ibmi` mode, all 6 acts verified)
+
+- **Why:** the agency flags/scores were hand-typed. User's point: the demo story is *unstructured + structured data together*, so precision matters less than showing the mechanism. Fandom character pages (Biography, Personality) are the unstructured source.
+- **Pipeline (re-run order):** `setup/_fetch_fandom_characters.py` (MediaWiki API with browser User-Agent; plain page fetch is 403; lookup "Character (Actress)" -> "Character" -> search; page accepted only if infobox `portrayed` names the actress; `OVERRIDES`/`NO_PAGE` dicts for hand fixes) -> `demo-ui/src/data/bond/bond_fandom_characters.json` (88 rows, 83 with biography, 22 with personality, 5 no page: Kerim Bey's Girlfriend, Keystone Kop, Angel of Death (Lumley), Rubelvitch, Bond's Lover). Then `setup/_score_bond_agency_from_text.py` (keyword rubric, character must be grammatical subject of the verb; depth = 1 + 2*objective + 2*expertise + 2*climax + 2*combat/intel + 1*survives; idempotent). Then `_embed_bond_corpus.py`, `9-load-bond-data-pg.py`, `9b-load-bond-data-ibmi.py`, deploy.
+- **New columns** in `bond_actress_career_analysis.json` and both DBs: `editorial_depth_score` (the old hand-typed score, kept once), `agency_source`, `agency_confidence` (High >=3000 chars / Medium >=1000 / Low / "Editorial only" for 5 rows with no page), `agency_evidence_chars`, `agency_evidence` (supporting sentence per flag), `fandom_page_url` (permalink with oldid). Flags and `character_depth_score` are overwritten for the 83 text-backed rows. Role category / occupation are still hand-typed.
+- **Corpus 148 -> 231:** +83 `FANDOM_*` passages (Personality section, else most agency-dense Biography paragraph, <=700 chars; licence CC BY-SA 3.0). Embeddings regenerated (231 docs). Act 6 now has a linked excerpt for 85 of 87 rows.
+- **UI/API:** Act 4 gains "Backed by Wiki Text" column, "Where The Scores Come From" and "Limits Of The Rubric" notes; scores labelled "(from wiki text)" instead of "(editorial)"; Act 5/6 counts and corpus wording updated; About panel updated. Act 4 SQL now also selects `agency_confidence`.
+- **Live result:** score distribution now spreads 1-10 (old hand-typed clustered at 2-4). Act 4: high agency (>=8) 21 cast, career 27.1 vs 28.5 yrs low (still does NOT show longer careers), prior career 9.6 vs 7.9, rating 6.53 vs 6.58.
+- **Honest limits (stated on screen):** keyword rubric on fan-written plot text, not an LLM, not a gold standard. Known oddities: Vesper Lynd scores 5 (editorial 9), Honey Ryder 4; thin pages (<1000 chars) score low because they are short; Act 5 top hit is Valerie Leon "Hotel Receptionist" 0.478 (MiniLM quirk). Act 4/Act 6 similarity now share the same source text, so they are not independent evidence (said in the takeaway).
+- **Gotchas:** PowerShell has no heredoc; a stray `python -` opens a REPL and hangs the tool (use `write_file` for scripts). `.ts` file is CRLF: multi-line `search_and_replace` fails, use single-line replaces or `apply_diff` per line. `_test_bond_ibmi.py` is slow (>3 min); use `_verify_bond_wording.py` instead.
+- **Next (optional):** (1) tune the rubric for Vesper/Honey or swap in an LLM rater (watsonx.ai) and store its evidence the same way, (2) show `agency_evidence` for a chosen character in the UI, (3) add a text-vs-editorial score comparison view, (4) the 5 no-page rows.
+
+
 ## Session 24 — Lisa Funnell scholarship added (deployed, `ibmi` mode)
 
 - Source: https://lisafunnell.com/articles/ (abstracts only on that page). Read in full: Flow article "Nomi/No Me?" (flowjournal.org) and the Participations survey paper (working PDF: `https://www.participations.org/17-02-04-funnell.pdf`; the link on her page 404s; fetch tool can't read PDFs, so download and extract with `pypdf`). Tandfonline is 403 to bots, so Craig-era / phases items are abstract-level only.
